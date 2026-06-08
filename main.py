@@ -134,6 +134,19 @@ MAIN_KEYBOARD = [
 
 USER_STATES = {}
 
+# Rate limiting — har bir foydalanuvchi uchun so'nggi buyruq vaqti
+_RATE_LIMIT: dict = {}
+_RATE_COOLDOWN = 2.5  # soniya
+
+def _is_rate_limited(user_id: int) -> bool:
+    """True qaytarsa — foydalanuvchi hali cooldown da."""
+    last = _RATE_LIMIT.get(user_id, 0)
+    now  = time.monotonic()
+    if now - last < _RATE_COOLDOWN:
+        return True
+    _RATE_LIMIT[user_id] = now
+    return False
+
 BUTTON_TEXTS = {
     "🔍 Skanerlash",
     "🔎 Kalit So'z Qidiruv",
@@ -202,6 +215,8 @@ async def del_admin_handler(event):
 @bot.on(events.NewMessage(pattern="🔍 Skanerlash"))
 async def btn_scan(event):
     if not await is_admin(event.sender_id):
+        return
+    if _is_rate_limited(event.sender_id):
         return
     USER_STATES[event.sender_id] = 'waiting_auto_scan_link'
     await event.respond(
@@ -744,6 +759,10 @@ async def global_input_processor(event):
     if txt and (txt in BUTTON_TEXTS or txt.startswith('/')):
         return
 
+    # Rate limiting — spam bosishdan himoya
+    if _is_rate_limited(event.sender_id):
+        return
+
     # ── 🛡 Havola tekshirish rejimi ──────────────────────────────────
     if event.sender_id in _PHISHING_WAIT:
         if txt == "❌ Bekor Qilish":
@@ -755,6 +774,13 @@ async def global_input_processor(event):
 
     state = USER_STATES.get(event.sender_id)
     if not state:
+        # Foydalanuvchi tasodifiy matn yozgan — sessiya yo'q
+        if txt and not txt.startswith('/'):
+            await event.respond(
+                "⚠️ Faol sessiya yo'q.\n"
+                "Quyidagi tugmalardan birini bosing yoki /start yuboring.",
+                buttons=MAIN_KEYBOARD
+            )
         return
 
     # ── 1. Avtomatik skanerlash (guruh / kanal / yopiq) ─────────────
@@ -1073,17 +1099,23 @@ async def run_comment_scan(sender_id, target, fpath, status_msg):
         await bot.send_file(
             sender_id, fpath,
             caption=(
-                f"✅ **{ch_title}** comment skanerlash yakunlandi!\n"
+                f"✅ **{_md_escape(ch_title)}** comment skanerlash yakunlandi!\n"
                 f"👥 Jami: `{count}` ta profil yozildi."
             )
         )
+    except FloodWaitError as e:
+        wait_min = e.seconds // 60 + 1
+        await bot.send_message(
+            sender_id,
+            f"⏳ Telegram so'rov chekladi — {wait_min} daqiqadan keyin qayta urining.\n"
+            f"(FloodWait: {e.seconds} soniya)"
+        )
     except Exception as e:
-        import traceback
-        err_detail = traceback.format_exc()
+        logger.warning("run_comment_scan xato: %s", e)
         await bot.send_message(
             sender_id,
             f"❌ Comment skanerlashda xatolik:\n`{e}`\n\n"
-            f"Sabab: discussion guruh topilmadi yoki kanal yopiq."
+            "Sabab: discussion guruh topilmadi yoki kanal yopiq."
         )
     finally:
         try:
@@ -1743,7 +1775,10 @@ async def watch_music_handler(event):
 async def watch_alert_sender():
     """Kuzatiladigan musiqa yoki kalit so'z alert topilganda xabar yuboradi."""
     while True:
-        item = await engine._WATCH_ALERTS.get()
+        try:
+            item = await asyncio.wait_for(engine._WATCH_ALERTS.get(), timeout=300)
+        except asyncio.TimeoutError:
+            continue  # 5 daqiqa signal yo'q — normal, davom etish
         try:
             # Yangi format: ('alert', hit_dict)
             if isinstance(item, tuple) and len(item) == 2 and item[0] == 'alert':
@@ -2026,7 +2061,15 @@ async def test_fpcalc(event):
         )
         return
     try:
-        result = subprocess.run([found_path, "-version"], capture_output=True, text=True, timeout=10)
+        import subprocess
+        loop = asyncio.get_event_loop()
+        # run_in_executor — event loop bloklanmaydi
+        result = await loop.run_in_executor(
+            None,
+            lambda: subprocess.run(
+                [found_path, "-version"], capture_output=True, text=True, timeout=10
+            )
+        )
         await event.respond(
             f"✅ **fpcalc topildi!**\n"
             f"📁 Yo\'li: `{found_path}`\n"
@@ -2121,10 +2164,13 @@ async def _rescan_all_profiles_music(sender_id, status_msg):
             f"✅ **Musiqa rescan yakunlandi!**\n\n"
             f"👥 Tekshirildi: `{count}` ta\n"
             f"🎶 Topildi: `{found}` ta")
-        try: await status_msg.delete()
-        except: pass
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
     except Exception as e:
-        await bot.send_message(sender_id, f"❌ Xatolik: {e}")
+        logger.error("Musiqa rescan xato: %s", e)
+        await bot.send_message(sender_id, f"❌ Xatolik: `{e}`")
 
 
 @bot.on(events.NewMessage(pattern=r'/test_channel (.+)'))
@@ -2405,12 +2451,17 @@ async def _run_phishing_check(sender_id, message):
                         except Exception:
                             await bot.send_message(sender_id, p_out)
     except Exception as e:
-        await bot.send_message(sender_id, f"❌ Tahlil xatosi: {e}")
+        logger.error("_run_phishing_check xato: %s", e)
+        await bot.send_message(sender_id, f"❌ Tahlil xatosi: `{e}`")
     finally:
-        await bot.send_message(sender_id, "✅ Tahlil yakunlandi.",
-                               buttons=Button.clear())
         _PHISHING_WAIT.discard(sender_id)
-        await bot.send_message(sender_id, "Asosiy menyu:", buttons=MAIN_KEYBOARD)
+        try:
+            await bot.send_message(
+                sender_id, "✅ Tahlil yakunlandi. Asosiy menyu:",
+                buttons=MAIN_KEYBOARD
+            )
+        except Exception:
+            pass
 
 
 @bot.on(events.NewMessage(pattern="🔄 Botni Qayta Yuklash"))
@@ -2682,7 +2733,7 @@ async def scan_queue_runner():
                     keyword, days, st = target
                     asyncio.create_task(run_keyword_search(sender_id, keyword, st, days))
             except Exception as e:
-                print(f"scan_queue_runner xatosi: {e}")
+                logger.error("scan_queue_runner xatosi: %s", e)
         finally:
             _SCAN_QUEUE.task_done()
 
@@ -3877,13 +3928,13 @@ async def main():
                 # Session fayl mavjud (qr_login2.py dan) — telefon kerak emas
                 await userbot2.start()
                 me2 = await userbot2.get_me()
-                print(f"✅ Userbot2 session dan tushdi: {me2.first_name} (+{me2.phone})")
+                logger.info("Userbot2 session dan tushdi: %s (+%s)", me2.first_name, me2.phone)
             else:
                 # USERBOT2_PHONE bilan oddiy login
                 await userbot2.start(phone=_USERBOT2_PHONE)
-                print(f"✅ Userbot2 ishga tushdi ({_USERBOT2_PHONE})")
+                logger.info("Userbot2 ishga tushdi (%s)", _USERBOT2_PHONE)
         except Exception as e:
-            print(f"[OGOHLANTIRISH] Userbot2 ishga tushmadi: {e} — faqat 1 userbot bilan davom etilmoqda")
+            logger.warning("Userbot2 ishga tushmadi: %s — faqat 1 userbot bilan davom etilmoqda", e)
 
     # Elektr uzilishi qolgan vaqtinchalik fayllarni tozalash
     import glob as _glob
@@ -3899,7 +3950,7 @@ async def main():
     asyncio.create_task(engine.music_channel_tracker(userbot, userbot2))
     asyncio.create_task(watch_alert_sender())
     asyncio.create_task(scan_queue_runner())
-    print("✅ Kiber-Stansiya OSINT Pro ishga tushdi!")
+    logger.info("Kiber-Stansiya OSINT Pro ishga tushdi!")
     await bot.run_until_disconnected()
 
 if __name__ == '__main__':
@@ -3909,10 +3960,10 @@ if __name__ == '__main__':
             asyncio.run(main())
             break  # Agar normal to'xtasa — chiqish
         except KeyboardInterrupt:
-            print("\nBot to'xtatildi (Ctrl+C).")
+            logger.info("Bot to'xtatildi (Ctrl+C).")
             break
         except Exception as _e:
-            print(f"\n[KRITIK] Bot kutilmagan xato bilan to'xtadi: {_e}")
-            print(f"[INFO] {_restart_delay} soniyadan keyin qayta ishga tushadi...")
+            logger.critical("Bot kutilmagan xato bilan to'xtadi: %s", _e)
+            logger.info("%d soniyadan keyin qayta ishga tushadi...", _restart_delay)
             time.sleep(_restart_delay)
-            print("[INFO] Qayta ishga tushmoqda...")
+            logger.info("Qayta ishga tushmoqda...")
