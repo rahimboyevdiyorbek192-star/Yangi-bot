@@ -1,0 +1,33 @@
+# Maxfiy fayllar — HECH QACHON git ga tushmaydi
+.env
+*.session
+*.session-journal
+
+# Ma'lumotlar bazasi
+*.db
+*.db-wal
+*.db-shm
+
+# Loglar
+flood_log.txt
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vaqtinchalik fayllar
+*.tmp
+qr_login*.html
