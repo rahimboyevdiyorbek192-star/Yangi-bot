@@ -1,10 +1,13 @@
 # music_scanner.py — Kanal musiqa skanerlash va taqqoslash
 import os
+import logging
 import asyncio
 import random
 import aiosqlite
 import database as db_mod
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 # Numpy optimallashtirish — o'rnatilgan bo'lsa 100x tezroq taqqoslash
 try:
@@ -12,13 +15,23 @@ try:
     _HAS_NUMPY = True
 except ImportError:
     _HAS_NUMPY = False
-    print("[MUSIQA] numpy topilmadi — Python rejimida ishlaydi (sekinroq). "
-          "'pip install numpy' bilan o'rnating.")
+    logging.getLogger(__name__).info(
+        "numpy topilmadi — Python rejimida ishlaydi (sekinroq). "
+        "'pip install numpy' bilan o'rnating."
+    )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MUSIC_DB  = os.path.join(BASE_DIR, "music_fingerprints.db")
 
-SCANNING = False  # Fon skanerlash holati
+SCANNING = False          # Fon skanerlash holati
+_SCANNING_LOCK = None     # asyncio.Lock() — ishga tushganda yaratiladi
+
+
+def _get_scanning_lock():
+    global _SCANNING_LOCK
+    if _SCANNING_LOCK is None:
+        _SCANNING_LOCK = asyncio.Lock()
+    return _SCANNING_LOCK
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -73,7 +86,7 @@ async def save_fingerprint(channel_id, channel_name, file_name, fingerprint, dur
             )
             await db.commit()
     except Exception as e:
-        print(f"save_fingerprint xatosi: {e}")
+        logger.error("save_fingerprint xatosi: %s", e)
 
 
 async def mark_channel_scanned(channel_id):
@@ -118,7 +131,14 @@ def get_fingerprint(audio_path):
     chromaprint (fpcalc) yordamida.
     """
     import subprocess
-    import sys
+
+    # Fayl mavjudligi va hajmini tekshirish
+    if not audio_path or not os.path.isfile(audio_path):
+        logger.warning("get_fingerprint: fayl topilmadi: %s", audio_path)
+        return None, None
+    if os.path.getsize(audio_path) == 0:
+        logger.warning("get_fingerprint: fayl bo'sh: %s", audio_path)
+        return None, None
 
     # fpcalc ni bot papkasidan qidirish
     fpcalc_path = os.path.join(BASE_DIR, "fpcalc.exe")
@@ -133,6 +153,7 @@ def get_fingerprint(audio_path):
             capture_output=True, text=True, timeout=30
         )
         if result.returncode != 0:
+            logger.warning("fpcalc xato qaytardi (code=%d): %s", result.returncode, result.stderr[:200])
             return None, None
         fp       = None
         duration = None
@@ -140,10 +161,13 @@ def get_fingerprint(audio_path):
             if line.startswith("FINGERPRINT="):
                 fp = line.split("=", 1)[1]
             elif line.startswith("DURATION="):
-                duration = float(line.split("=", 1)[1])
+                try:
+                    duration = float(line.split("=", 1)[1])
+                except ValueError:
+                    pass
         return fp, duration
     except Exception as e:
-        print(f"Fingerprint xatosi: {e}")
+        logger.warning("get_fingerprint xatosi (%s): %s", os.path.basename(audio_path), e)
         return None, None
 
 
@@ -157,7 +181,8 @@ def compare_fingerprints(fp1, fp2):
         arr1 = parse_fingerprint(fp1) if isinstance(fp1, str) else fp1
         arr2 = parse_fingerprint(fp2) if isinstance(fp2, str) else fp2
         return compare_fp_arrays(arr1, arr2)
-    except Exception:
+    except Exception as e:
+        logger.debug("compare_fingerprints xato: %s", e)
         return 0.0
 
 
@@ -239,7 +264,8 @@ def compare_fingerprints_sliding(fp1, fp2, window=100):
                             return best_score
 
         return best_score
-    except Exception:
+    except Exception as e:
+        logger.debug("compare_fingerprints_sliding xato: %s", e)
         return 0.0
 
 
@@ -275,7 +301,8 @@ def batch_compare_against_watches(watch_fps_parsed, all_fps_raw, threshold=0.70)
         try:
             arr = parse_fingerprint(fp_str)
             db_parsed.append((ch_id, ch_name, fname, arr))
-        except Exception:
+        except Exception as e:
+            logger.warning("Fingerprint parse xato (%s/%s): %s", ch_name, fname, e)
             continue
 
     for ch_id, ch_name, fname, arr2 in db_parsed:
@@ -381,8 +408,8 @@ async def _scan_source_list(userbot, sources, shared, status_msg, total_sources)
                         f"📢 `{channel_name}`\n"
                         f"🎶 Jami audio: `{shared['audio']}` ta"
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Status xabar yangilanmadi: %s", e)
 
             async for msg in userbot.iter_messages(entity, limit=500):
                 if not SCANNING:
@@ -402,7 +429,7 @@ async def _scan_source_list(userbot, sources, shared, status_msg, total_sources)
                         async with shared['lock']:
                             shared['audio'] += 1
                 except Exception as e:
-                    print(f"Audio xatosi: {e}")
+                    logger.warning("Audio xatosi (msg_id=%s): %s", msg.id, e)
                 finally:
                     if os.path.exists(tmp_path):
                         os.remove(tmp_path)
@@ -413,7 +440,7 @@ async def _scan_source_list(userbot, sources, shared, status_msg, total_sources)
                 shared['scanned'] += 1
 
         except Exception as e:
-            print(f"Kanal xatosi ({source}): {e}")
+            logger.warning("Kanal xatosi (%s): %s", source, e)
 
         await asyncio.sleep(random.uniform(1, 3))
 
@@ -424,9 +451,11 @@ async def scan_all_channels(userbot, bot, admin_id, status_msg=None, userbot2=No
     userbot2 berilsa: maxfiy kanallar→userbot1, ochiq kanallar→ikkala parallel.
     """
     global SCANNING
-    if SCANNING:
-        return
-    SCANNING = True
+    lock = _get_scanning_lock()
+    async with lock:
+        if SCANNING:
+            return
+        SCANNING = True
 
     await init_music_db()
     sources = await get_all_sources()
@@ -509,7 +538,8 @@ async def search_music(audio_path, threshold=0.70):
 
 async def stop_scanning():
     global SCANNING
-    SCANNING = False
+    async with _get_scanning_lock():
+        SCANNING = False
 
 
 async def add_watch_music(fingerprint, duration, name, admin_id):
