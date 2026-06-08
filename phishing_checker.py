@@ -2,6 +2,7 @@
 import os
 import ssl
 import socket
+import logging
 import sqlite3
 import base64
 import unicodedata
@@ -11,6 +12,13 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
 import requests
+
+logger = logging.getLogger(__name__)
+
+# Fayl hajmi chegaralari
+MAX_APK_SIZE_MB  = 150    # APK tahlil uchun maksimal hajm
+MAX_DEX_SIZE_MB  = 30     # Bitta DEX fayl maksimal hajmi
+MAX_OGG_SIZE_MB  = 50     # OGG tahlil uchun maksimal hajm
 
 executor = ThreadPoolExecutor(max_workers=10)
 
@@ -73,8 +81,8 @@ def save_stat(url: str, risk: int):
         conn.execute("INSERT INTO phishing_stats (url, risk) VALUES (?, ?)", (url, risk))
         conn.commit()
         conn.close()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("save_stat xato: %s", e)
 
 def get_stats() -> tuple:
     try:
@@ -84,7 +92,8 @@ def get_stats() -> tuple:
         ).fetchone()
         conn.close()
         return (row[0] or 0), (row[1] or 0)
-    except Exception:
+    except Exception as e:
+        logger.debug("get_stats xato: %s", e)
         return 0, 0
 
 
@@ -265,7 +274,8 @@ async def probe_telegram_bot(userbot, username: str) -> dict:
                 "sample_text": texts[0][:200] if texts else "",
                 "clicked_buttons": clicked_buttons}
     except Exception as e:
-        return {"available": False, "error": str(e)[:150]}
+        logger.debug("probe_telegram_bot xato (%s): %s", username, e)
+        return {"available": False}
 
 async def check_telegram_channel_info(bot_client, url: str) -> dict:
     """Bot API orqali Telegram kanal/bot ma'lumotlarini oladi."""
@@ -955,6 +965,11 @@ async def analyze_apk(file_path: str) -> tuple:
         file_size = os.path.getsize(file_path)
         file_size_mb = file_size / (1024 * 1024)
 
+        # Hajm chegarasi — ZIP bomb himoyasi
+        if file_size_mb > MAX_APK_SIZE_MB:
+            return (f"❌ APK fayl juda katta: {file_size_mb:.1f} MB "
+                    f"(maksimal {MAX_APK_SIZE_MB} MB).", 40)
+
         # ZIP sifatida ochish
         try:
             zf = zipfile.ZipFile(file_path, 'r')
@@ -964,7 +979,6 @@ async def analyze_apk(file_path: str) -> tuple:
 
         has_manifest = 'AndroidManifest.xml' in names
         has_dex      = any(n.endswith('.dex') for n in names)
-        has_classes  = 'classes.dex' in names
 
         if not has_manifest or not has_dex:
             zf.close()
@@ -974,7 +988,11 @@ async def analyze_apk(file_path: str) -> tuple:
         hashes = await loop.run_in_executor(executor, _apk_hash, file_path)
         vt = await loop.run_in_executor(executor, _check_vt_hash, hashes['sha256'])
 
-        # AndroidManifest.xml dan ruxsatlarni ajratish
+        # AndroidManifest.xml hajmini tekshirib o'qish
+        manifest_info = zf.getinfo('AndroidManifest.xml')
+        if manifest_info.file_size > 5 * 1024 * 1024:  # 5MB
+            zf.close()
+            return "❌ AndroidManifest.xml juda katta — shubhali APK.", 75
         manifest_data = zf.read('AndroidManifest.xml')
         manifest_strings = await loop.run_in_executor(
             executor, _extract_strings_from_binary, manifest_data, 4
@@ -988,11 +1006,21 @@ async def analyze_apk(file_path: str) -> tuple:
                 pkg_name = s
                 break
 
-        # classes.dex dan URL va IP topish
+        # classes.dex dan URL va IP topish — har bir DEX hajmi tekshiriladi
         dex_names = [n for n in names if n.endswith('.dex')]
         all_dex_strings = []
+        _max_dex_bytes = MAX_DEX_SIZE_MB * 1024 * 1024
         for dex_name in dex_names[:3]:  # Faqat birinchi 3 ta DEX
-            dex_data = zf.read(dex_name)
+            try:
+                dex_info = zf.getinfo(dex_name)
+                if dex_info.file_size > _max_dex_bytes:
+                    logger.warning("DEX fayl juda katta o'tkazib yuborildi: %s (%d MB)",
+                                   dex_name, dex_info.file_size // (1024 * 1024))
+                    continue
+                dex_data = zf.read(dex_name)
+            except Exception as e:
+                logger.warning("DEX o'qishda xato (%s): %s", dex_name, e)
+                continue
             dex_strings = await loop.run_in_executor(
                 executor, _extract_strings_from_binary, dex_data, 6
             )
@@ -1093,12 +1121,20 @@ def _parse_ogg_comments(data: bytes) -> dict:
             return result
         pos += 7  # skip \x03vorbis
 
+        # vendor_len bounds check
+        if pos + 4 > len(data):
+            return result
         vendor_len = struct.unpack_from('<I', data, pos)[0]
         pos += 4
+        if vendor_len > 65535 or pos + vendor_len > len(data):
+            return result
         vendor = data[pos:pos + vendor_len].decode('utf-8', errors='replace')
         result["vendor"] = vendor
         pos += vendor_len
 
+        # comment_count bounds check
+        if pos + 4 > len(data):
+            return result
         comment_count = struct.unpack_from('<I', data, pos)[0]
         pos += 4
 
@@ -1161,6 +1197,12 @@ async def analyze_ogg(file_path: str) -> tuple:
     try:
         file_size = os.path.getsize(file_path)
         file_size_kb = file_size / 1024
+        file_size_mb = file_size / (1024 * 1024)
+
+        # Hajm chegarasi — xotira to'lib ketmasin
+        if file_size_mb > MAX_OGG_SIZE_MB:
+            return (f"❌ OGG fayl juda katta: {file_size_mb:.1f} MB "
+                    f"(maksimal {MAX_OGG_SIZE_MB} MB).", 40)
 
         with open(file_path, 'rb') as f:
             data = f.read()
