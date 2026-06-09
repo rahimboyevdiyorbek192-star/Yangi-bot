@@ -626,16 +626,23 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
         _src_str = str(target_group)
         _iter_offset_id = 0
         _iter_done = False
+        _iter_batch_num = 0          # har 2000 xabarda userbot almashadi
+        _MSG_BATCH = 2000
         while not _iter_done:
+            # Har batch uchun navbatdagi userbot — iter_messages yukini teng bo'lish
+            _iter_ub = _ub_pool[_iter_batch_num % _ub_count]
+            _iter_batch_num += 1
+            _batch_msg_count = 0
             try:
-                async for msg in userbot.iter_messages(
-                    entity, limit=None,
+                async for msg in _iter_ub.iter_messages(
+                    entity, limit=_MSG_BATCH,
                     offset_id=_iter_offset_id, reverse=False
                 ):
                     if not msg.sender_id or msg.sender_id <= 0:
                         _iter_offset_id = msg.id
                         continue
                     _msg2_count += 1
+                    _batch_msg_count += 1
                     _iter_offset_id = msg.id
 
                     if msg.sender_id not in seen_ids:
@@ -747,14 +754,16 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                             )
                         except Exception:
                             pass
-                _iter_done = True  # barcha xabarlar muvaffaqiyatli o'qildi
+                # Batch to'liq kelmasa — oxiriga yetdik
+                if _batch_msg_count < _MSG_BATCH:
+                    _iter_done = True
             except FloodWaitError as e:
                 log_flood("iter_messages_scan", e.seconds)
                 await asyncio.sleep(min(e.seconds + 5, 300))
-                # flood dan keyin davom etamiz (while loop qayta ishlaydi)
+                # flood dan keyin davom etamiz, lekin offset saqlanadi
             except Exception as _msg_err:
                 logger.warning("[deep_scan] iter_messages xatosi: %s", _msg_err)
-                _iter_done = True  # boshqa xatoda to'xtatamiz
+                _iter_done = True
 
         # Qolgan kesh batchni saqlash
         if _cache_batch:
