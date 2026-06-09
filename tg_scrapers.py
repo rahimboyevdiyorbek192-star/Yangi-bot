@@ -910,10 +910,12 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
 
             count += 1
             ws.append([
-                count, first_name, last_name, uname, uid,
+                count,
+                _excel_safe(first_name), _excel_safe(last_name), _excel_safe(uname), uid,
                 ("+" + phone) if phone else "",
-                is_bot, is_premium, bio,
-                shaxsiy, maxfiy, ochiq, profile_url
+                is_bot, is_premium,
+                _excel_safe(bio), _excel_safe(shaxsiy), _excel_safe(maxfiy), _excel_safe(ochiq),
+                profile_url
             ])
 
             has_db = shaxsiy if shaxsiy else (maxfiy if maxfiy else "❌")
@@ -1647,10 +1649,11 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
             has_db  = maxfiy if maxfiy else (shaxsiy if shaxsiy else "❌")
 
             sheet.append([
-                count, f_name, l_name, uname, uid,
+                count,
+                _excel_safe(f_name), _excel_safe(l_name), _excel_safe(uname), uid,
                 ("+" + phone) if phone else "",
-                bio, bio_links_str,
-                shaxsiy, maxfiy, p_link
+                _excel_safe(bio), _excel_safe(bio_links_str),
+                _excel_safe(shaxsiy), _excel_safe(maxfiy), p_link
             ])
 
             # Bazaga saqlash
@@ -1932,9 +1935,11 @@ async def scan_channel_comments(userbot, target, output_path, status_msg,
             f_name, l_name, uname, phone, bio, bio_links_str, shaxsiy, maxfiy, p_link, b_date, has_db = collected[uid]
             count += 1
             sheet.append([
-                count, f_name, l_name, uname, uid,
+                count,
+                _excel_safe(f_name), _excel_safe(l_name), _excel_safe(uname), uid,
                 ("+" + phone) if phone else "",
-                bio, bio_links_str, shaxsiy, maxfiy, p_link
+                _excel_safe(bio), _excel_safe(bio_links_str),
+                _excel_safe(shaxsiy), _excel_safe(maxfiy), p_link
             ])
             await db_mod.save_user_to_bank(
                 uid, str(target), f_name, l_name, uname,
