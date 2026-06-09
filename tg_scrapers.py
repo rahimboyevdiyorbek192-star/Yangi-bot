@@ -638,7 +638,7 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
 
                     if msg.sender_id not in seen_ids:
                         sender = msg.sender
-                        if sender and not getattr(sender, 'bot', False):
+                        if sender and not getattr(sender, 'bot', False) and not getattr(sender, 'deleted', False):
                             seen_ids.add(sender.id)
                             participants.append(sender)
 
@@ -787,6 +787,10 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
         for _wi, user in enumerate(work_list):
             while SCANNER_PAUSED:
                 await asyncio.sleep(1)
+
+            # O'chirilgan hisob — API chaqirmay darhol o'tkazib yuborish
+            if getattr(user, 'deleted', False):
+                continue
 
             uid = user.id
             bio = ""
@@ -1549,6 +1553,10 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
             while SCANNER_PAUSED:
                 await asyncio.sleep(1)
 
+            # O'chirilgan hisob — API chaqirmay o'tkazib yuborish
+            if getattr(user, 'deleted', False):
+                continue
+
             count += 1
             if count % 20 == 0:
                 try:
@@ -1823,6 +1831,10 @@ async def scan_channel_comments(userbot, target, output_path, status_msg,
         async def _scan_one(uid, user):
             while SCANNER_PAUSED:
                 await asyncio.sleep(1)
+
+            # O'chirilgan hisob — API chaqirmay o'tkazib yuborish
+            if getattr(user, 'deleted', False):
+                return
 
             f_name = user.first_name or ""
             l_name = user.last_name  or ""
