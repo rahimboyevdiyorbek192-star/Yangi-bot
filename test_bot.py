@@ -6,6 +6,7 @@ import asyncio
 import os
 import sys
 import traceback
+import pytest
 
 # Test natijalari
 PASS = []
@@ -51,6 +52,7 @@ _orig_db = db_mod.DB_NAME
 _tmp_db  = tempfile.mktemp(suffix=".db")
 db_mod.DB_NAME = _tmp_db
 
+@pytest.mark.asyncio
 async def test_database():
     try:
         await db_mod.init_db()
@@ -420,6 +422,7 @@ _orig_music_db = music_mod.MUSIC_DB
 _tmp_music_db  = tempfile.mktemp(suffix="_music.db")
 music_mod.MUSIC_DB = _tmp_music_db
 
+@pytest.mark.asyncio
 async def test_music_db():
     try:
         await music_mod.init_music_db()
