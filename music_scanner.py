@@ -369,6 +369,86 @@ async def get_all_sources():
     return list(sources)
 
 
+async def get_sources_routed():
+    """
+    Manbalarni userbot bo'yicha to'g'ri yo'naltiradi.
+
+    hidden_channel_knocker.userbot_idx ustuniga asoslanib maxfiy kanallar
+    ularni qo'shgan userbot ga beriladi. Ochiq kanallar 50/50 bo'linadi.
+
+    Qaytaradi:
+      private_per_ub: {0: [...], 1: [...]}  — maxfiy kanallar (userbot_idx bo'yicha)
+      public: [...]                          — ochiq kanallar (tashqaridan bo'linadi)
+    """
+    await init_music_db()
+
+    # source → assigned_ub_idx (0 yoki 1)
+    # hidden_channel_knocker eng ishonchli manba — u yerda userbot_idx bor
+    assigned: dict = {}
+
+    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
+        # 1. hidden_channel_knocker — userbot_idx bo'yicha
+        async with db.execute(
+            "SELECT channel_id, COALESCE(userbot_idx, 0) "
+            "FROM hidden_channel_knocker WHERE status='joined'"
+        ) as cur:
+            for (ch_id, ub_idx) in await cur.fetchall():
+                idx = 1 if ub_idx == 1 else 0
+                assigned[str(ch_id)] = idx
+
+        # 2. group_link — qaysi userbot skanerlagan aniq emas → ochiq deb belgilaymiz
+        async with db.execute(
+            "SELECT DISTINCT group_link FROM users_memory_bank "
+            "WHERE group_link IS NOT NULL AND group_link != ''"
+        ) as cur:
+            for (link,) in await cur.fetchall():
+                if link not in assigned:
+                    assigned[link] = None  # ochiq (keyinroq bo'linadi)
+
+        # 3. open_channels — ochiq
+        async with db.execute(
+            "SELECT DISTINCT open_channels FROM users_memory_bank "
+            "WHERE open_channels IS NOT NULL AND open_channels != '' "
+            "AND open_channels != 'Yo''q'"
+        ) as cur:
+            for (ch,) in await cur.fetchall():
+                for link in ch.split(','):
+                    link = link.strip()
+                    if link and (link.startswith('http') or
+                                 link.startswith('@') or
+                                 link.startswith('t.me/')):
+                        if link not in assigned:
+                            assigned[link] = None
+
+        # 4. has_hidden — ochiq yoki maxfiy (hidden_channel_knocker da yo'q bo'lsa)
+        async with db.execute(
+            "SELECT DISTINCT has_hidden FROM users_memory_bank "
+            "WHERE has_hidden IS NOT NULL AND has_hidden != '' "
+            "AND has_hidden != '❌' AND has_hidden NOT LIKE '%Maxfiy%'"
+        ) as cur:
+            for (ch,) in await cur.fetchall():
+                for link in ch.split(','):
+                    link = link.strip()
+                    if link and (link.startswith('http') or
+                                 't.me/' in link or
+                                 link.startswith('@') or
+                                 link.lstrip('-').isdigit()):
+                        if link not in assigned:
+                            assigned[link] = None
+
+    private_per_ub: dict = {0: [], 1: []}
+    public: list = []
+
+    for source, ub_idx in assigned.items():
+        if ub_idx is not None:
+            # hidden_channel_knocker dan — aniq userbot
+            private_per_ub[ub_idx].append(source)
+        else:
+            public.append(source)
+
+    return private_per_ub, public
+
+
 # ─────────────────────────────────────────────────────────────────────
 # FON SKANERLASH
 # ─────────────────────────────────────────────────────────────────────

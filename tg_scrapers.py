@@ -2355,22 +2355,28 @@ async def music_channel_tracker(userbot, userbot2=None):
                     try:
                         await _music_process_one_source(userbot, source, userbot_idx=0)
                     except Exception as e:
-                        print(f"Kanal xatosi ({source}): {e}")
+                        logger.warning("Kanal xatosi (%s): %s", source, e)
             else:
-                # Allaqachon qo'shilgan maxfiy → doim userbot1 (u a'zo)
-                # Ochiq kanallar → 50/50, yangi invite link topilsa o'sha userbot knockerga yozadi
-                already_private = [s for s in sources if _is_private_source(str(s))]
-                public          = [s for s in sources if not _is_private_source(str(s))]
+                # Maxfiy kanallar → ularni qo'shgan userbot (userbot_idx bo'yicha)
+                # Ochiq kanallar → 50/50
+                private_per_ub, public = await music_mod.get_sources_routed()
 
                 mid  = (len(public) + 1) // 2
                 pub1 = public[:mid]
                 pub2 = public[mid:]
 
-                print(f"[MUSIQA] Maxfiy(ub1): {len(already_private)}, Ochiq ub1: {len(pub1)}, Ochiq ub2: {len(pub2)}")
+                ub1_list = private_per_ub[0] + pub1
+                ub2_list = private_per_ub[1] + pub2
+
+                logger.info(
+                    "[MUSIQA] ub1: %d ta (maxfiy:%d, ochiq:%d) | ub2: %d ta (maxfiy:%d, ochiq:%d)",
+                    len(ub1_list), len(private_per_ub[0]), len(pub1),
+                    len(ub2_list), len(private_per_ub[1]), len(pub2),
+                )
 
                 await asyncio.gather(
-                    _music_process_list(userbot,  already_private + pub1, userbot_idx=0),
-                    _music_process_list(userbot2, pub2,                   userbot_idx=1),
+                    _music_process_list(userbot,  ub1_list, userbot_idx=0),
+                    _music_process_list(userbot2, ub2_list, userbot_idx=1),
                     return_exceptions=True
                 )
 
