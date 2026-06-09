@@ -116,14 +116,31 @@ async def init_db():
         except Exception:
             pass  # Ustun allaqachon mavjud — normal
         await db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_mc_text   ON messages_cache(text)"
-        )
-        await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_mc_date   ON messages_cache(msg_date)"
         )
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_mc_source ON messages_cache(source)"
         )
+        # FTS5 — tezkor full-text qidiruv (LIKE dan 100x tez)
+        await db.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts
+            USING fts5(text, tokenize='unicode61 remove_diacritics 1')
+        """)
+        await db.execute("""
+            CREATE TRIGGER IF NOT EXISTS messages_cache_ai
+            AFTER INSERT ON messages_cache
+            BEGIN
+                INSERT INTO messages_fts(rowid, text) VALUES (new.id, new.text);
+            END
+        """)
+        # Mavjud ma'lumotlarni FTS5 ga bir martalik ko'chirish
+        async with db.execute("SELECT COUNT(*) FROM messages_fts") as _cur:
+            _fts_n = (await _cur.fetchone())[0]
+        if _fts_n == 0:
+            await db.execute(
+                "INSERT INTO messages_fts(rowid, text) "
+                "SELECT id, COALESCE(text,'') FROM messages_cache"
+            )
         await db.execute("""
             CREATE TABLE IF NOT EXISTS source_sync_state (
                 source      TEXT PRIMARY KEY,
