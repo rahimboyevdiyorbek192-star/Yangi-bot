@@ -103,7 +103,7 @@ def log_flood(func_name, seconds):
             f.write(line)
     except Exception:
         pass
-    print(f"[FLOOD] {func_name}: {seconds}s")
+    logger.info("[FLOOD] %s: %ss", func_name, seconds)
 
 _RESOURCE = {
     'heavy_scan':    False,   # Og'ir skanerlash (guruh, xabar, comment)
@@ -120,7 +120,7 @@ def resource_start(task_name: str):
     _RESOURCE['profile_slow'] = True
     _RESOURCE['current_task'] = task_name
     _RESOURCE['task_start']   = datetime.now()
-    print(f"[RESURS] {task_name} boshlandi — fon jarayonlar sekinlashtirildi")
+    logger.info("[RESURS] %s boshlandi — fon jarayonlar sekinlashtirildi", task_name)
 
 def resource_stop(task_name: str):
     """Og'ir jarayon tugaganda chaqiriladi."""
@@ -129,7 +129,7 @@ def resource_stop(task_name: str):
     _RESOURCE['profile_slow'] = False
     _RESOURCE['current_task'] = None
     _RESOURCE['task_start']   = None
-    print(f"[RESURS] {task_name} tugadi — fon jarayonlar davom ettirildi")
+    logger.info("[RESURS] %s tugadi — fon jarayonlar davom ettirildi", task_name)
 
 def resource_status() -> str:
     """Hozirgi resurs holati."""
@@ -183,7 +183,7 @@ async def get_user_by_phone(userbot, phone: str):
                 if attempt == 2:
                     return None, None
             except Exception as e:
-                print(f"get_user_by_phone xatosi ({phone}): {e}")
+                logger.warning("get_user_by_phone xatosi (%s): %s", phone, e)
                 return None, None
 
         if not result.users:
@@ -211,7 +211,7 @@ async def get_user_by_phone(userbot, phone: str):
         return user, full_info
 
     except Exception as e:
-        print(f"get_user_by_phone xatosi ({phone}): {e}")
+        logger.warning("get_user_by_phone xatosi (%s): %s", phone, e)
         return None, None
     finally:
         # 3. Kontaktni o'chirish (har doim)
@@ -320,7 +320,7 @@ async def send_join_request(userbot, invite_link):
         err = str(e).lower()
         if "already" in err or "request" in err:
             return True  # Avval yuborilgan — normal
-        print(f"send_join_request xatosi ({invite_link}): {e}")
+        logger.warning("send_join_request xatosi (%s): %s", invite_link, e)
         return False
 
 
@@ -775,7 +775,7 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                 await asyncio.sleep(min(e.seconds + 5, 300))
                 # flood dan keyin davom etamiz (while loop qayta ishlaydi)
             except Exception as _msg_err:
-                print(f"[deep_scan] iter_messages xatosi: {_msg_err}")
+                logger.warning("[deep_scan] iter_messages xatosi: %s", _msg_err)
                 _iter_done = True  # boshqa xatoda to'xtatamiz
 
         # Qolgan kesh batchni saqlash
@@ -955,7 +955,7 @@ async def resume_pending_scans(userbot, bot, admin_id):
                                    scan_id, status_msg)
             )
         except Exception as e:
-            print(f"Resume xatosi: {e}")
+            logger.warning("Resume xatosi: %s", e)
             await db_mod.finish_scan_session(scan_id, status='error')
 
 
@@ -1045,7 +1045,7 @@ async def hidden_channel_24h_knocker(userbot, bot, admin_id):
                         if getattr(ent, 'username', None):
                             dialog_map[f"https://t.me/{ent.username}"] = dlg
             except Exception as e:
-                print(f"iter_dialogs xatosi: {e}")
+                logger.warning("iter_dialogs xatosi: %s", e)
 
             for ch_id_str, creator_id, source_group, last_req_str in tasks:
                 if MONITORING_PAUSED:
@@ -1158,7 +1158,7 @@ async def hidden_channel_24h_knocker(userbot, bot, admin_id):
                 await asyncio.sleep(random.uniform(3, 8))
 
         except Exception as e:
-            print(f"hidden_channel_24h_knocker: {e}")
+            logger.warning("hidden_channel_24h_knocker: %s", e)
         await asyncio.sleep(300)
 
 
@@ -2311,7 +2311,7 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
                 )
                 await db.commit()
         except Exception as e:
-            print(f"Progress saqlash xatosi: {e}")
+            logger.warning("Progress saqlash xatosi: %s", e)
 
     await asyncio.sleep(random.uniform(0.5, 1.5))
 
@@ -2324,10 +2324,10 @@ async def _music_process_list(userbot, sources, userbot_idx=0):
         except FloodWaitError as e:
             wait = e.seconds
             log_flood("music_channel_tracker", wait)
-            print(f"[MUSIQA] FloodWait {wait}s. Kutilmoqda...")
+            logger.info("[MUSIQA] FloodWait %ss. Kutilmoqda...", wait)
             await asyncio.sleep(min(wait, 3600))
         except Exception as e:
-            print(f"Kanal xatosi ({source}): {e}")
+            logger.warning("Kanal xatosi (%s): %s", source, e)
             await asyncio.sleep(5)
 
 
@@ -2381,22 +2381,22 @@ async def music_channel_tracker(userbot, userbot2=None):
                 )
 
         except RpcCallFailError as e:
-            print(f"[MUSIQA] Telegram server xatosi (RpcCallFail): {e}. 60s kutilmoqda...")
+            logger.warning("[MUSIQA] Telegram server xatosi (RpcCallFail): %s. 60s kutilmoqda...", e)
             await asyncio.sleep(60)
             continue
         except FloodWaitError as e:
             wait = e.seconds
             log_flood("music_channel_tracker", wait)
-            print(f"[MUSIQA] FloodWait {wait}s. Kutilmoqda...")
+            logger.info("[MUSIQA] FloodWait %ss. Kutilmoqda...", wait)
             await asyncio.sleep(min(wait, 3600))
             continue
         except Exception as e:
-            print(f"music_channel_tracker xatosi: {e}")
+            logger.warning("music_channel_tracker xatosi: %s", e)
             await asyncio.sleep(30)
 
         global _CHANNEL_MUSIC_DONE
         _CHANNEL_MUSIC_DONE = True
-        print("[MUSIQA] Barcha kanal musiqalari skanerlandi — profil musiqasiga o'tiladi")
+        logger.info("[MUSIQA] Barcha kanal musiqalari skanerlandi — profil musiqasiga o'tiladi")
 
         await asyncio.sleep(3600)
         _CHANNEL_MUSIC_DONE = False
@@ -2616,7 +2616,7 @@ async def _notify_channel_joined(ub, bot, admin_id, idx, entity, ch_id_str, ch_i
     asyncio.create_task(
         _scan_channel_music_after_join(ub, bot, admin_id, entity, ch_id_str)
     )
-    print(f"[WATCHER] ✅ Kanal ochildi: {ch_name}")
+    logger.info("[WATCHER] Kanal ochildi: %s", ch_name)
 
 
 async def _get_channel_dialog_ids(ub) -> set:
@@ -2668,7 +2668,7 @@ async def _match_new_channel_to_pending(ub, bot, admin_id, idx, channel_id):
                     return
             await asyncio.sleep(0.3)
     except Exception as e:
-        print(f"[WATCHER] Moslashtirish xatosi (ch={channel_id}): {e}")
+        logger.warning("[WATCHER] Moslashtirish xatosi (ch=%s): %s", channel_id, e)
 
 
 async def _backup_full_scan(all_bots, bot, admin_id):
@@ -2676,7 +2676,7 @@ async def _backup_full_scan(all_bots, bot, admin_id):
     Har 2 soatdagi zaxira skan: barcha pending kanallarni
     CheckChatInviteRequest orqali tekshiradi (2s pauza = flood yo'q).
     """
-    print("[WATCHER] 🔍 2-soatlik zaxira skan boshlanmoqda...")
+    logger.info("[WATCHER] 2-soatlik zaxira skan boshlanmoqda...")
     for idx, ub in enumerate(all_bots):
         try:
             async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
@@ -2735,9 +2735,9 @@ async def _backup_full_scan(all_bots, bot, admin_id):
 
                 await asyncio.sleep(2)
 
-            print(f"[WATCHER] UB{idx+1}: {len(channels)} ta kanal backup skanda tekshirildi")
+            logger.info("[WATCHER] UB%d: %d ta kanal backup skanda tekshirildi", idx+1, len(channels))
         except Exception as e:
-            print(f"[WATCHER] UB{idx+1} backup xatosi: {e}")
+            logger.warning("[WATCHER] UB%d backup xatosi: %s", idx+1, e)
 
 
 async def channel_join_watcher(userbot, bot, admin_id, extra_userbots=None):
@@ -2754,7 +2754,7 @@ async def channel_join_watcher(userbot, bot, admin_id, extra_userbots=None):
     known_ids = {}
     for idx, ub in enumerate(all_bots):
         known_ids[idx] = await _get_channel_dialog_ids(ub)
-        print(f"[WATCHER] UB{idx+1}: {len(known_ids[idx])} ta kanal yodlandi")
+        logger.info("[WATCHER] UB%d: %d ta kanal yodlandi", idx+1, len(known_ids[idx]))
 
     last_backup = datetime.now()
 
@@ -2770,7 +2770,7 @@ async def channel_join_watcher(userbot, bot, admin_id, extra_userbots=None):
                 new_ids = current - known_ids[idx]
                 known_ids[idx] = current
                 if new_ids:
-                    print(f"[WATCHER] UB{idx+1}: {len(new_ids)} ta yangi kanal!")
+                    logger.info("[WATCHER] UB%d: %d ta yangi kanal!", idx+1, len(new_ids))
                     for cid in new_ids:
                         asyncio.create_task(
                             _match_new_channel_to_pending(ub, bot, admin_id, idx, cid)
@@ -2782,7 +2782,7 @@ async def channel_join_watcher(userbot, bot, admin_id, extra_userbots=None):
                 asyncio.create_task(_backup_full_scan(all_bots, bot, admin_id))
 
         except Exception as e:
-            print(f"[WATCHER] Xato: {e}")
+            logger.warning("[WATCHER] xato: %s", e)
 
 
 async def _distribute_channels(n: int):
@@ -2831,7 +2831,7 @@ async def _distribute_channels(n: int):
                                     (rowid,)
                                 )
                             counts[i] -= len(to_reset)
-                            print(f"[KNOCKER] Userbot{i+1}dan {len(to_reset)} ta kanal NULL ga qaytarildi (rebalance)")
+                            logger.info("[KNOCKER] Userbot%ddan %d ta kanal NULL ga qaytarildi (rebalance)", i+1, len(to_reset))
 
             # 3. NULL kanallarni tayinlash
             async with db.execute(
@@ -2853,9 +2853,9 @@ async def _distribute_channels(n: int):
                 counts[min_idx] += 1
 
             await db.commit()
-            print(f"[KNOCKER] {len(unassigned)} ta kanal taqsimlandi: {counts}")
+            logger.info("[KNOCKER] %d ta kanal taqsimlandi: %s", len(unassigned), counts)
     except Exception as e:
-        print(f"[KNOCKER] Taqsimlashda xato: {e}")
+        logger.warning("[KNOCKER] Taqsimlashda xato: %s", e)
 
 
 async def smart_channel_knocker(userbot, bot, admin_id, extra_userbots=None):
@@ -2954,9 +2954,9 @@ async def smart_channel_knocker(userbot, bot, admin_id, extra_userbots=None):
                     continue
 
                 # 2. So'rovnoma yuborish
-                print(f"[KNOCKER] UB{idx+1} urinmoqda: {ch_id_str[:50]}")
+                logger.info("[KNOCKER] UB%d urinmoqda: %s", idx+1, ch_id_str[:50])
                 sent = await send_join_request(ub, ch_id_str)
-                print(f"[KNOCKER] UB{idx+1} natija: sent={sent}")
+                logger.info("[KNOCKER] UB%d natija: sent=%s", idx+1, sent)
                 if sent:
                     async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
                         await db.execute(
@@ -2964,13 +2964,13 @@ async def smart_channel_knocker(userbot, bot, admin_id, extra_userbots=None):
                             (now_str, idx, ch_id_str, ch_id_raw)
                         )
                         await db.commit()
-                    print(f"[KNOCKER] UB{idx+1} DB yangilandi ✓")
+                    logger.info("[KNOCKER] UB%d DB yangilandi", idx+1)
 
         except Exception as e:
             if 'FloodWait' in str(type(e).__name__):
                 wait = getattr(e, 'seconds', 60)
                 log_flood("smart_channel_knocker", wait)
-            print(f"smart_channel_knocker xatosi: {e}")
+            logger.warning("smart_channel_knocker xatosi: %s", e)
 
 
 async def _scan_channel_music_after_join(userbot, bot, admin_id, entity, ch_link):
@@ -3079,7 +3079,7 @@ async def _scan_channel_music_after_join(userbot, bot, admin_id, entity, ch_link
         )
 
     except Exception as e:
-        print(f"_scan_channel_music_after_join xatosi: {e}")
+        logger.warning("_scan_channel_music_after_join xatosi: %s", e)
 
 
 # ─────────────────────────────────────────────────────────────────────
