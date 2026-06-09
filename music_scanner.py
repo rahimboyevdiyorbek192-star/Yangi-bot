@@ -494,7 +494,7 @@ async def _scan_source_list(userbot, sources, shared, status_msg, total_sources)
             async for msg in userbot.iter_messages(entity, limit=500):
                 if not SCANNING:
                     break
-                if not msg.audio and not msg.voice:
+                if not msg.audio:
                     continue
                 # Kengaytmasiz yo'l — Telethon to'g'ri kengaytmani o'zi qo'shadi
                 tmp_base = os.path.join(BASE_DIR, f"tmp_audio_{msg.id}")
