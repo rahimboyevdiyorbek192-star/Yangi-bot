@@ -153,7 +153,7 @@ def get_fingerprint(audio_path):
             capture_output=True, text=True, timeout=30
         )
         if result.returncode != 0:
-            logger.warning("fpcalc xato qaytardi (code=%d): %s", result.returncode, result.stderr[:200])
+            logger.debug("fpcalc xato (code=%d): %s", result.returncode, result.stderr[:100])
             return None, None
         fp       = None
         duration = None
@@ -496,9 +496,15 @@ async def _scan_source_list(userbot, sources, shared, status_msg, total_sources)
                     break
                 if not msg.audio and not msg.voice:
                     continue
-                tmp_path = os.path.join(BASE_DIR, f"tmp_audio_{msg.id}.ogg")
+                # Kengaytmasiz yo'l — Telethon to'g'ri kengaytmani o'zi qo'shadi
+                tmp_base = os.path.join(BASE_DIR, f"tmp_audio_{msg.id}")
+                tmp_path = None
                 try:
-                    await msg.download_media(file=tmp_path)
+                    tmp_path = await msg.download_media(file=tmp_base)
+                    if not tmp_path or not os.path.isfile(tmp_path):
+                        continue
+                    if os.path.getsize(tmp_path) < 1024:  # 1 KB dan kichik — yaroqsiz
+                        continue
                     fp, duration = await get_fingerprint_async(tmp_path)
                     if fp:
                         file_name = f"{channel_name}_{msg.id}"
@@ -511,8 +517,12 @@ async def _scan_source_list(userbot, sources, shared, status_msg, total_sources)
                 except Exception as e:
                     logger.warning("Audio xatosi (msg_id=%s): %s", msg.id, e)
                 finally:
-                    if os.path.exists(tmp_path):
+                    if tmp_path and os.path.exists(tmp_path):
                         os.remove(tmp_path)
+                    # Eski .ogg fayl qolmagan bo'lsa ham tozalash
+                    _old = tmp_base + ".ogg"
+                    if os.path.exists(_old):
+                        os.remove(_old)
                 await asyncio.sleep(random.uniform(0.5, 1.5))
 
             await mark_channel_scanned(source)
