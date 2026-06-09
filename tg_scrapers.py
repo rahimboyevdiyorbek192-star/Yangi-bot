@@ -656,7 +656,7 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                                 _ub2 = _ub_pool[_ub_idx % _ub_count]
                                 _ub_idx += 1
                                 fi = await asyncio.wait_for(
-                                    _ub2(GetFullUserRequest(sender.id)), timeout=20
+                                    _ub2(GetFullUserRequest(sender.id)), timeout=8
                                 )
                                 fu   = fi.full_user
                                 _bio = fu.about or ""
@@ -795,11 +795,13 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
             ochiq = ""
 
             try:
-                await asyncio.sleep(0.5)   # flood oldini olish — 2 userbot = har biri 1.0s/call
+                _decay_flood()
+                extra_sleep = max(0.5, 0.5 + _FLOOD_PENALTY * 0.05)
+                await asyncio.sleep(extra_sleep)
                 _ub3 = _ub_pool[_ub_idx % _ub_count]
                 _ub_idx += 1
                 fi = await asyncio.wait_for(
-                    _ub3(GetFullUserRequest(uid)), timeout=20
+                    _ub3(GetFullUserRequest(uid)), timeout=8
                 )
                 fu  = fi.full_user
                 bio = fu.about or ""
@@ -1567,7 +1569,7 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
             await asyncio.sleep(0.35)
             try:
                 fi = await asyncio.wait_for(
-                    userbot(GetFullUserRequest(uid)), timeout=20
+                    userbot(GetFullUserRequest(uid)), timeout=8
                 )
                 bio = fi.full_user.about or ""
                 inv_links = extract_invite_links(bio)
@@ -1834,7 +1836,7 @@ async def scan_channel_comments(userbot, target, output_path, status_msg,
                 await asyncio.sleep(0.35)
                 try:
                     fi = await asyncio.wait_for(
-                        userbot(GetFullUserRequest(uid)), timeout=20
+                        userbot(GetFullUserRequest(uid)), timeout=8
                     )
                     bio = fi.full_user.about or ""
                     inv_links = extract_invite_links(bio)
