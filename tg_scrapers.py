@@ -1166,15 +1166,17 @@ async def hidden_channel_24h_knocker(userbot, bot, admin_id):
 # BACKGROUND PROFIL TRACKER
 # ─────────────────────────────────────────────────────────────────────
 
-async def background_profile_tracker(userbot):
-    batch_size = 50
+async def background_profile_tracker(userbot, shard: int = 0, total_shards: int = 1):
+    batch_size  = 50
+    offset_key  = f"profile_offset_shard{shard}"
+    log_prefix  = f"[PROFIL-{shard + 1}/{total_shards}]"
 
     # Kanal musiqa skanerlash tugaguncha kutish
     global _CHANNEL_MUSIC_DONE
-    print("[PROFIL] Kanal musiqalari tugashini kutmoqda...")
+    logger.info("%s Kanal musiqalari tugashini kutmoqda...", log_prefix)
     while not _CHANNEL_MUSIC_DONE:
         await asyncio.sleep(30)
-    print("[PROFIL] Kanal musiqalari tugadi — profil musiqasi boshlanadi")
+    logger.info("%s Kanal musiqalari tugadi — profil musiqasi boshlanadi", log_prefix)
 
     # Bazadan oxirgi offsetni olish
     async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
@@ -1184,7 +1186,7 @@ async def background_profile_tracker(userbot):
         )
         await db.commit()
         async with db.execute(
-            "SELECT value FROM tracker_state WHERE key='profile_offset'"
+            "SELECT value FROM tracker_state WHERE key=?", (offset_key,)
         ) as cur:
             row = await cur.fetchone()
             offset = int(row[0]) if row else 0
@@ -1196,23 +1198,24 @@ async def background_profile_tracker(userbot):
         try:
             async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
                 async with db.execute(
-                    "SELECT DISTINCT user_id FROM users_memory_bank ORDER BY user_id LIMIT ? OFFSET ?",
-                    (batch_size, offset)
+                    "SELECT DISTINCT user_id FROM users_memory_bank "
+                    "WHERE (ROWID % ?) = ? ORDER BY user_id LIMIT ? OFFSET ?",
+                    (total_shards, shard, batch_size, offset)
                 ) as cur:
                     users = await cur.fetchall()
 
             if not users:
                 offset = 0
-                # Offset nolga tushirildi — bazaga saqlash
                 async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
                     await db.execute(
-                        "INSERT OR REPLACE INTO tracker_state (key, value) VALUES ('profile_offset', '0')"
+                        "INSERT OR REPLACE INTO tracker_state (key, value) VALUES (?, '0')",
+                        (offset_key,)
                     )
                     await db.commit()
+                logger.info("%s Barcha profil aylanib chiqildi — 30 daqiqa kutilmoqda", log_prefix)
                 await asyncio.sleep(1800)
                 continue
 
-            now_str    = datetime.now().strftime("%Y-%m-%d %H:%M")
             # GetFullUserRequest: Telegram ~80 req/min limit
             # 2 parallel + 1.5s sleep = ~1.3 req/s = 78 req/min — xavfsiz chegara
             _api_sem   = asyncio.Semaphore(2)
@@ -1258,7 +1261,7 @@ async def background_profile_tracker(userbot):
                                 return
                             tmp_music = os.path.join(
                                 os.path.dirname(os.path.abspath(__file__)),
-                                f"tmp_profile_{uid}_{idx}.ogg"
+                                f"tmp_profile_{shard}_{uid}_{idx}.ogg"
                             )
                             try:
                                 async with _dl_sem:
@@ -1346,29 +1349,27 @@ async def background_profile_tracker(userbot):
                     else:
                         await asyncio.sleep(random.uniform(1.5, 3))
 
-            # 5 ta profil parallel skanerlash
             await asyncio.gather(
                 *[asyncio.create_task(_do_one_profile(uid)) for (uid,) in users],
                 return_exceptions=True
             )
 
             offset += batch_size
-            # Offsetni bazaga saqlash
             try:
                 async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
                     await db.execute(
-                        "INSERT OR REPLACE INTO tracker_state (key, value) VALUES ('profile_offset', ?)",
-                        (str(offset),)
+                        "INSERT OR REPLACE INTO tracker_state (key, value) VALUES (?, ?)",
+                        (offset_key, str(offset))
                     )
                     await db.commit()
             except Exception:
                 pass
         except RpcCallFailError as e:
-            print(f"[PROFIL] Telegram server xatosi (RpcCallFail): {e}. 60s kutilmoqda...")
+            logger.warning("%s Telegram server xatosi: %s. 60s kutilmoqda...", log_prefix, e)
             await asyncio.sleep(60)
             continue
         except Exception as e:
-            print(f"background_profile_tracker: {e}")
+            logger.warning("%s xato: %s", log_prefix, e)
         await asyncio.sleep(60)
 
 

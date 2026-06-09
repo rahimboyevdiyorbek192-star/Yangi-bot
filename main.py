@@ -3936,7 +3936,10 @@ async def main():
 
     asyncio.create_task(engine.smart_channel_knocker(userbot, bot, SUPER_ADMIN_ID, extra_userbots=_EXTRA_USERBOTS))
     asyncio.create_task(engine.channel_join_watcher(userbot, bot, SUPER_ADMIN_ID, extra_userbots=_EXTRA_USERBOTS))
-    asyncio.create_task(engine.background_profile_tracker(userbot))
+    _pt_shards = 2 if userbot2 else 1
+    asyncio.create_task(engine.background_profile_tracker(userbot,  shard=0, total_shards=_pt_shards))
+    if userbot2:
+        asyncio.create_task(engine.background_profile_tracker(userbot2, shard=1, total_shards=_pt_shards))
     asyncio.create_task(engine.music_channel_tracker(userbot, userbot2))
     asyncio.create_task(watch_alert_sender())
     asyncio.create_task(scan_queue_runner())
