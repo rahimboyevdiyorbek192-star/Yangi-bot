@@ -647,32 +647,89 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
 
                     if msg.sender_id not in seen_ids:
                         sender = msg.sender
-                        if sender and not getattr(sender, 'bot', False) and not getattr(sender, 'deleted', False):
+                        if sender and not getattr(sender, 'bot', False):
+                            _fn = sender.first_name or ""
+                            _ln = sender.last_name  or ""
+                            _un = sender.username   or ""
+                            # O'chirilgan hisob: ism ham, username ham yo'q → API yo'q
+                            if getattr(sender, 'deleted', False) or (not _fn and not _ln and not _un):
+                                seen_ids.add(sender.id)
+                                continue
                             seen_ids.add(sender.id)
                             participants.append(sender)
 
-                            # msg.sender dan bepul ma'lumotlar — API chaqiruvsiz yozish
-                            _fn = sender.first_name or ""
-                            _ln = sender.last_name  or ""
-                            _un = ("@" + sender.username) if sender.username else ""
-                            _ph = sender.phone or ""
+                            _ph      = sender.phone or ""
+                            _bio     = ""
+                            _shaxsiy = ""
+                            _maxfiy  = ""
+                            _ochiq   = ""
+                            try:
+                                await asyncio.sleep(_base_sleep + _FLOOD_PENALTY * 0.1)
+                                _ub2 = _ub_pool[_ub_idx % _ub_count]
+                                _ub_idx += 1
+                                fi = await asyncio.wait_for(
+                                    _ub2(GetFullUserRequest(sender.id)), timeout=8
+                                )
+                                fu   = fi.full_user
+                                _bio = fu.about or ""
+                                inv  = extract_invite_links(_bio)
+                                if inv:
+                                    _maxfiy = ", ".join(inv)
+                                al  = extract_bio_links(_bio)
+                                oc  = [l for l in al if l.startswith('@') or
+                                       ('t.me/' in l and '/+' not in l and 'joinchat' not in l)]
+                                _ochiq = ", ".join(oc) if oc else ""
+                                pc  = getattr(fu, 'personal_channel_id', None)
+                                if pc:
+                                    _shaxsiy = await _resolve_pc(fi, pc, userbot)
+                                    asyncio.ensure_future(_save_pc_id_to_cache(pc))
+                                if inv:
+                                    async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as _db:
+                                        for lnk in inv:
+                                            await _db.execute(
+                                                "INSERT OR IGNORE INTO hidden_channel_knocker "
+                                                "(channel_id, creator_id, source_group) VALUES (?,?,?)",
+                                                (lnk, sender.id, str(target_group))
+                                            )
+                                        await _db.commit()
+                            except FloodWaitError as e:
+                                _record_flood(e.seconds)
+                                log_flood("phase2_full_user", e.seconds)
+                                wait_sec = min(e.seconds + 2, 120)
+                                try:
+                                    await status_msg.edit(
+                                        f"⏳ **FloodWait:** {e.seconds}s kutilmoqda...\n"
+                                        f"📨 2-bosqich: {_msg2_count} xabar"
+                                    )
+                                except Exception:
+                                    pass
+                                await asyncio.sleep(wait_sec)
+                            except Exception:
+                                pass
 
-                            if _fn or _ln or _un:
-                                _purl = (f"https://t.me/{sender.username}" if sender.username
-                                         else f"tg://user?id={sender.id}")
+                            if _fn or _ln or _un or _bio:
+                                _purl  = (f"https://t.me/{sender.username}" if sender.username
+                                          else f"tg://user?id={sender.id}")
+                                _bdate = extract_exact_birth_date(_bio)
                                 count += 1
                                 ws.append([
                                     count,
-                                    _excel_safe(_fn), _excel_safe(_ln), _excel_safe(_un),
+                                    _excel_safe(_fn), _excel_safe(_ln),
+                                    _excel_safe("@" + _un if _un else ""),
                                     sender.id,
                                     ("+" + _ph) if _ph else "",
                                     "❌",
                                     "✅" if getattr(sender, "premium", False) else "❌",
-                                    "", "", "", "", _purl  # bio/shaxsiy/maxfiy/ochiq — bo'sh
+                                    _excel_safe(_bio), _excel_safe(_shaxsiy),
+                                    _excel_safe(_maxfiy), _excel_safe(_ochiq), _purl
                                 ])
+                                _has_db = _shaxsiy if _shaxsiy else (_maxfiy if _maxfiy else "❌")
                                 await db_mod.save_user_to_bank(
-                                    sender.id, str(target_group), _fn, _ln, _un,
-                                    _ph, "", "", "Yo'q", "❌"
+                                    sender.id, str(target_group), _fn, _ln,
+                                    "@" + _un if _un else "",
+                                    _ph, _bdate, _bio,
+                                    ", ".join(extract_bio_links(_bio)) or "Yo'q",
+                                    _has_db
                                 )
 
                     # Matnli xabarlarni keshga yig'ish
