@@ -532,6 +532,8 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
         _ub_pool += [u for u in extra_userbots if u is not None]
     _ub_count = len(_ub_pool)
     _ub_idx = 0  # round-robin hisoblagich
+    # Har bir userbot max 60 ta/min: 1 bot → 1.0s, 2 bot → 0.5s
+    _base_sleep = round(1.0 / _ub_count, 3)
 
     global MONITORING_PAUSED, _SCAN_COUNT, _FLOOD_PENALTY
     _SCAN_COUNT += 1
@@ -652,7 +654,7 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                             _maxfiy  = ""
                             _ochiq   = ""
                             try:
-                                await asyncio.sleep(0.5)
+                                await asyncio.sleep(_base_sleep + _FLOOD_PENALTY * 0.1)
                                 _ub2 = _ub_pool[_ub_idx % _ub_count]
                                 _ub_idx += 1
                                 fi = await asyncio.wait_for(
@@ -800,8 +802,7 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
 
             try:
                 _decay_flood()
-                extra_sleep = max(0.5, 0.5 + _FLOOD_PENALTY * 0.05)
-                await asyncio.sleep(extra_sleep)
+                await asyncio.sleep(_base_sleep + _FLOOD_PENALTY * 0.1)
                 _ub3 = _ub_pool[_ub_idx % _ub_count]
                 _ub_idx += 1
                 fi = await asyncio.wait_for(
@@ -1574,7 +1575,7 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
             shaxsiy  = ""
             maxfiy   = ""
 
-            await asyncio.sleep(0.35)
+            await asyncio.sleep(1.0)
             try:
                 fi = await asyncio.wait_for(
                     userbot(GetFullUserRequest(uid)), timeout=8
@@ -1845,7 +1846,7 @@ async def scan_channel_comments(userbot, target, output_path, status_msg,
             maxfiy  = ""
 
             async with _cmt_sem:
-                await asyncio.sleep(0.35)
+                await asyncio.sleep(1.0)
                 try:
                     fi = await asyncio.wait_for(
                         userbot(GetFullUserRequest(uid)), timeout=8
@@ -4697,7 +4698,7 @@ async def migrate_pc_links(userbot, bot=None, admin_id=None) -> tuple:
             old_link = m.group(0)
             if ch_id not in _PC_RESOLVE_CACHE:
                 unique_resolved += 1
-                await asyncio.sleep(0.35)  # flood oldini olish
+                await asyncio.sleep(1.0)  # flood oldini olish
             new_link = await _resolve_one_pc_id(userbot, ch_id, old_link)
             if new_link != old_link:
                 new_has_hidden = new_has_hidden.replace(old_link, new_link)
@@ -4710,7 +4711,7 @@ async def migrate_pc_links(userbot, bot=None, admin_id=None) -> tuple:
             old_link = m.group(0)
             if ch_id not in _PC_RESOLVE_CACHE:
                 unique_resolved += 1
-                await asyncio.sleep(0.35)
+                await asyncio.sleep(1.0)
             new_link = await _resolve_one_pc_id(userbot, ch_id, old_link)
             if new_link != old_link:
                 new_open = new_open.replace(old_link, new_link)
