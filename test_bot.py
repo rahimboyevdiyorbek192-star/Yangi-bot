@@ -507,7 +507,8 @@ try:
     # Kerakli class/exception stublar
     for attr in ['GetFullUserRequest', 'ImportContactsRequest', 'DeleteContactsRequest',
                  'GetFullChannelRequest', 'JoinChannelRequest', 'ImportChatInviteRequest',
-                 'InputPhoneContact', 'FloodWaitError', 'ChannelPrivateError', 'RpcCallFailError']:
+                 'InputPhoneContact', 'PeerChannel',
+                 'FloodWaitError', 'ChannelPrivateError', 'RpcCallFailError']:
         for mod_name in ['telethon.tl.functions.users', 'telethon.tl.functions.contacts',
                          'telethon.tl.functions.channels', 'telethon.tl.functions.messages',
                          'telethon.tl.types', 'telethon.errors']:

@@ -225,11 +225,13 @@ async def get_user_by_phone(userbot, phone: str):
 
 
 def extract_bio_links(bio_text):
-    """Bio dagi barcha Telegram havolalarini topadi."""
+    """Bio dagi barcha Telegram havolalarini topadi (t.me/ va @username formatlar)."""
     if not bio_text:
         return []
     results = []
     seen = set()
+
+    # 1. t.me/ va telegram.me/ formatlar
     pattern = r'(?:https?://)?(?:t\.me|telegram\.me)(/[^\s\)\]>\"\']+)'
     for m in re.finditer(pattern, bio_text):
         path = m.group(1)
@@ -243,9 +245,19 @@ def extract_bio_links(bio_text):
         if first.startswith('+') or first in ('joinchat', 'addlist', 'c'):
             results.append(full_url)
         elif re.match(r'^[a-zA-Z0-9_]{3,}$', first):
-            results.append("@" + first)
+            at_form = "@" + first
+            seen.add(at_form)   # ikkinchi pass da takror chiqmasin
+            results.append(at_form)
         else:
             results.append(full_url)
+
+    # 2. @username formati — t.me/ siz to'g'ridan-to'g'ri
+    for m in re.finditer(r'(?<!\w)@([a-zA-Z0-9_]{3,32})(?!\w)', bio_text):
+        uname = "@" + m.group(1)
+        if uname not in seen:
+            seen.add(uname)
+            results.append(uname)
+
     return results
 
 
