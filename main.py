@@ -1644,7 +1644,7 @@ async def _run_excel_batch_both(sender_id, part1, part2):
             "⚠️ 2-Userbot topilmadi. Qolgan kanallar 1-Userbot bilan skanerlanadi."
         )
         tasks.append(engine.excel_batch_scanner(
-            userbot, part1 + part2, bot, sender_id, userbot_idx=0
+            userbot, part2, bot, sender_id, userbot_idx=0
         ))
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
@@ -1665,9 +1665,12 @@ async def btn_watch_music(event):
             lines_txt.append(f"  {w_id}. 🎵 `{w_name}` — {w_date}")
         buttons = []
         for w_id, w_name, w_date in watches:
-            buttons.append([Button.inline(f"🗑 {w_id}. {w_name[:25]}", data=f"del_watch_{w_id}")])
+            buttons.append([
+                Button.inline(f"🗑 {w_name[:20]}", data=f"del_watch_{w_id}"),
+                Button.inline(f"📋 #{w_id}", data=f"watch_archive_{w_id}"),
+            ])
         buttons.append([Button.inline("➕ Musiqa Qo\'shish", data="add_watch_music")])
-        buttons.append([Button.inline("📋 Arxiv (Topilganlar)", data="watch_archive")])
+        buttons.append([Button.inline("📋 Barcha Arxiv", data="watch_archive")])
         buttons.append([Button.inline("🔄 Bazani Qayta Skanerlash", data="watch_rescan")])
         await event.respond("\n".join(lines_txt), buttons=buttons)
     else:
