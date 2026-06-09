@@ -1142,7 +1142,7 @@ async def hidden_channel_24h_knocker(userbot, bot, admin_id):
                     )
                     async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
                         await db.execute(
-                            "UPDATE hidden_channel_knocker SET status='joined' WHERE channel_id=?",
+                            "UPDATE hidden_channel_knocker SET status='joined', userbot_idx=0 WHERE channel_id=?",
                             (ch_id_str,)
                         )
                         if creator_id:
@@ -2599,9 +2599,9 @@ async def _notify_channel_joined(ub, bot, admin_id, idx, entity, ch_id_str, ch_i
 
     async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as db:
         cur = await db.execute(
-            "UPDATE hidden_channel_knocker SET status='joined', numeric_id=?, channel_id=? "
+            "UPDATE hidden_channel_knocker SET status='joined', numeric_id=?, channel_id=?, userbot_idx=? "
             "WHERE (channel_id=? OR channel_id=?) AND status='pending'",
-            (numeric_id_str, ch_id_str, ch_id_str, ch_id_raw)
+            (numeric_id_str, ch_id_str, idx, ch_id_str, ch_id_raw)
         )
         if cur.rowcount == 0:
             return  # Allaqachon 'joined' — ikkinchi xabar yubormaslik
