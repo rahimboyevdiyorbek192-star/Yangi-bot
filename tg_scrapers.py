@@ -10,7 +10,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.functions.contacts import ImportContactsRequest, DeleteContactsRequest
-from telethon.tl.types import InputPhoneContact
+from telethon.tl.types import InputPhoneContact, PeerChannel
 from telethon.tl.functions.channels import GetFullChannelRequest, JoinChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest
 from telethon.errors import FloodWaitError, ChannelPrivateError, RpcCallFailError
@@ -400,7 +400,7 @@ async def _resolve_pc_link(ub, ch_id: int) -> str:
             return _pc_link_cache[ch_id]
         link = f"https://t.me/c/{ch_id}/1"
         try:
-            ent   = await asyncio.wait_for(ub.get_entity(ch_id), timeout=8)
+            ent   = await asyncio.wait_for(ub.get_entity(PeerChannel(ch_id)), timeout=8)
             uname = getattr(ent, 'username', None)
             if uname:
                 link = f"https://t.me/{uname}"
@@ -425,7 +425,7 @@ async def resolve_personal_channel(userbot, ch_id):
     Qaytaradi: (link, is_private)
     """
     try:
-        ch_entity = await userbot.get_entity(ch_id)
+        ch_entity = await userbot.get_entity(PeerChannel(ch_id))
 
         # Numeric ID ni kesh jadvaliga saqlash — a'zo bo'lmasdan ham olish mumkin
         if hasattr(ch_entity, 'id') and ch_entity.id:
@@ -687,7 +687,7 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                                 if pc:
                                     try:
                                         _pc_e  = await asyncio.wait_for(
-                                            userbot.get_entity(pc), timeout=8
+                                            userbot.get_entity(PeerChannel(pc)), timeout=8
                                         )
                                         _pc_un = getattr(_pc_e, 'username', None)
                                         _shaxsiy = f"https://t.me/{_pc_un}" if _pc_un else ""
@@ -837,7 +837,7 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                 if pc:
                     try:
                         pc_ent   = await asyncio.wait_for(
-                            userbot.get_entity(pc), timeout=8
+                            userbot.get_entity(PeerChannel(pc)), timeout=8
                         )
                         pc_uname = getattr(pc_ent, 'username', None)
                         shaxsiy  = f"https://t.me/{pc_uname}" if pc_uname else ""
@@ -1315,7 +1315,7 @@ async def background_profile_tracker(userbot, shard: int = 0, total_shards: int 
                     elif getattr(fi.full_user, 'personal_channel_id', None):
                         ch_id = fi.full_user.personal_channel_id
                         try:
-                            ch_ent  = await userbot.get_entity(ch_id)
+                            ch_ent  = await userbot.get_entity(PeerChannel(ch_id))
                             ch_user = getattr(ch_ent, 'username', None)
                             has_hidden = f"https://t.me/{ch_user}" if ch_user else ""
                         except ChannelPrivateError:
@@ -1603,7 +1603,7 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
                 if ch_id:
                     try:
                         pc_ent   = await asyncio.wait_for(
-                            userbot.get_entity(ch_id), timeout=8
+                            userbot.get_entity(PeerChannel(ch_id)), timeout=8
                         )
                         pc_uname = getattr(pc_ent, 'username', None)
                         shaxsiy  = f"https://t.me/{pc_uname}" if pc_uname else ""
@@ -1869,7 +1869,7 @@ async def scan_channel_comments(userbot, target, output_path, status_msg,
                     if ch_id:
                         try:
                             pc_ent   = await asyncio.wait_for(
-                                userbot.get_entity(ch_id), timeout=8
+                                userbot.get_entity(PeerChannel(ch_id)), timeout=8
                             )
                             pc_uname = getattr(pc_ent, 'username', None)
                             shaxsiy  = f"https://t.me/{pc_uname}" if pc_uname else ""
@@ -4800,7 +4800,7 @@ async def _resolve_one_pc_id(userbot, ch_id: int, original: str) -> str:
     if ch_id in _PC_RESOLVE_CACHE:
         return _PC_RESOLVE_CACHE[ch_id]
     try:
-        ent   = await asyncio.wait_for(userbot.get_entity(ch_id), timeout=8)
+        ent   = await asyncio.wait_for(userbot.get_entity(PeerChannel(ch_id)), timeout=8)
         uname = getattr(ent, 'username', None)
         link  = f"https://t.me/{uname}" if uname else original
     except Exception:
