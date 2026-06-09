@@ -3209,6 +3209,7 @@ async def search_keywords_local(keyword_str: str, days: int = None):
     Qaytaradi: natijalar ro'yxati [{name, username, user_id, date, text, source, matched}]
     """
     import database as db_mod
+    from datetime import timedelta
 
     keywords = [k.strip().lower() for k in keyword_str.split(',') if k.strip()]
     if not keywords:
