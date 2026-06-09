@@ -528,7 +528,7 @@ async def _scan_source_list(userbot, sources, shared, status_msg, total_sources)
 async def scan_all_channels(userbot, bot, admin_id, status_msg=None, userbot2=None):
     """
     Barcha manbalardan audio fayllarni yuklab, fingerprint oladi va saqlaydi.
-    userbot2 berilsa: maxfiy kanallar→userbot1, ochiq kanallar→ikkala parallel.
+    userbot2 berilsa: userbot_idx bo'yicha aniq routing, ochiq kanallar 50/50.
     """
     global SCANNING
     lock = _get_scanning_lock()
@@ -538,24 +538,31 @@ async def scan_all_channels(userbot, bot, admin_id, status_msg=None, userbot2=No
         SCANNING = True
 
     await init_music_db()
-    sources = await get_all_sources()
-    total_sources = len(sources)
     shared = {'audio': 0, 'scanned': 0, 'lock': asyncio.Lock()}
 
     try:
         if userbot2 is None:
+            sources = await get_all_sources()
+            total_sources = len(sources)
             await _scan_source_list(userbot, sources, shared, status_msg, total_sources)
         else:
-            already_private = [s for s in sources if _is_private_source(str(s))]
-            public          = [s for s in sources if not _is_private_source(str(s))]
+            # userbot_idx bo'yicha to'g'ri routing
+            private_per_ub, public = await get_sources_routed()
+
+            ub1_private = private_per_ub.get(0, [])
+            ub2_private = private_per_ub.get(1, [])
 
             mid  = (len(public) + 1) // 2
             pub1 = public[:mid]
             pub2 = public[mid:]
 
+            ub1_sources = ub1_private + pub1
+            ub2_sources = ub2_private + pub2
+            total_sources = len(ub1_sources) + len(ub2_sources)
+
             await asyncio.gather(
-                _scan_source_list(userbot,  already_private + pub1, shared, status_msg, total_sources),
-                _scan_source_list(userbot2, pub2,                   shared, None,        total_sources),
+                _scan_source_list(userbot,  ub1_sources, shared, status_msg, total_sources),
+                _scan_source_list(userbot2, ub2_sources, shared, None,        total_sources),
                 return_exceptions=True
             )
     finally:
