@@ -399,35 +399,6 @@ async def _save_pc_id_to_cache(pc: int):
         logger.debug("_save_pc_id_to_cache xato (pc=%s): %s", pc, e)
 
 
-async def _resolve_pc_link(ub, ch_id: int) -> str:
-    """
-    personal_channel_id ni to'g'ri havolaga aylantiradi.
-    Kanal @username ga ega bo'lsa → https://t.me/username
-    Bo'lmasa            fallback → https://t.me/c/{ch_id}/1
-    Memory kesh bilan — bir skan davomida API qayta chaqirilmaydi.
-    Faqat background_profile_tracker uchun — skanerlashda ishlatilmaydi.
-    """
-    async with _pc_link_lock:
-        if ch_id in _pc_link_cache:
-            return _pc_link_cache[ch_id]
-        link = f"https://t.me/c/{ch_id}/1"
-        try:
-            ent   = await asyncio.wait_for(ub.get_entity(PeerChannel(ch_id)), timeout=8)
-            uname = getattr(ent, 'username', None)
-            if uname:
-                link = f"https://t.me/{uname}"
-            now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-            async with aiosqlite.connect(db_mod.DB_NAME, timeout=5) as _db:
-                await _db.execute(
-                    "INSERT OR REPLACE INTO resolved_channel_ids "
-                    "(channel_link, numeric_id, resolved_at) VALUES (?, ?, ?)",
-                    (link, f"-100{ch_id}", now_str)
-                )
-                await _db.commit()
-        except Exception as e:
-            logger.debug("_resolve_pc_link xato (ch_id=%s): %s", ch_id, e)
-        _pc_link_cache[ch_id] = link
-        return link
 
 
 def _pc_entity_from_full(fi, ch_id: int):
@@ -453,61 +424,26 @@ def _format_pc_link(ent, ch_id: int) -> str:
 async def _resolve_pc(fi, ch_id: int, ub) -> str:
     """
     personal_channel_id → link:
-    1. fi.chats — GetFullUserRequest javobi (extra API call yo'q)
-    2. PeerChannel cache — backup
-    3. Fallback: t.me/c/{id}/1
+    1. Memory kesh — bir skan ichida qayta API chaqirilmaydi
+    2. fi.chats — GetFullUserRequest javobi (extra API call yo'q)
+    3. get_entity(PeerChannel) — faqat keshda yo'q bo'lsa
+    4. Fallback: t.me/c/{id}/1
     """
+    async with _pc_link_lock:
+        if ch_id in _pc_link_cache:
+            return _pc_link_cache[ch_id]
+
     ent = _pc_entity_from_full(fi, ch_id)
     if ent is None:
         try:
             ent = await asyncio.wait_for(ub.get_entity(PeerChannel(ch_id)), timeout=8)
         except Exception:
             pass
-    return _format_pc_link(ent, ch_id)
 
-
-
-    """
-    Shaxsiy kanal linkini hal qiladi.
-    Numeric ID ni resolved_channel_ids jadvaliga saqlaydi (keshlayd).
-    Qaytaradi: (link, is_private)
-    """
-    try:
-        ch_entity = await userbot.get_entity(PeerChannel(ch_id))
-
-        # Numeric ID ni kesh jadvaliga saqlash — a'zo bo'lmasdan ham olish mumkin
-        if hasattr(ch_entity, 'id') and ch_entity.id:
-            _eid = str(ch_entity.id).lstrip('-')
-            _num_id = f"-100{_eid}" if not str(ch_entity.id).startswith('-100') else str(ch_entity.id)
-            _link_key = str(ch_id)
-            now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-            try:
-                async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
-                    await _db.execute(
-                        "INSERT OR REPLACE INTO resolved_channel_ids "
-                        "(channel_link, numeric_id, resolved_at) VALUES (?, ?, ?)",
-                        (_link_key, _num_id, now_str)
-                    )
-                    await _db.commit()
-            except Exception:
-                pass
-
-        ch_uname  = getattr(ch_entity, 'username', None)
-        if ch_uname:
-            return f"https://t.me/{ch_uname}", False
-        try:
-            full_ch = await userbot(GetFullChannelRequest(ch_entity))
-            inv = getattr(full_ch.full_chat, 'exported_invite', None)
-            if inv and getattr(inv, 'link', None):
-                return inv.link, False
-        except Exception:
-            pass
-        ch_title = getattr(ch_entity, 'title', '')
-        return ch_title or str(ch_id), False
-    except ChannelPrivateError:
-        return f"🔒 Maxfiy (ID:{ch_id})", True
-    except Exception:
-        return "", False
+    link = _format_pc_link(ent, ch_id)
+    async with _pc_link_lock:
+        _pc_link_cache[ch_id] = link
+    return link
 
 
 def apply_excel_styles(ws, total_rows):
@@ -2468,149 +2404,6 @@ def is_music_file(msg):
             return False
         return True  # Barcha audio formatlarini olish
     return False
-
-async def _scan_user_music(userbot, uid, name, channel_link, full_info=None):
-    """
-    Har a'zo skanerlanganda parallel ishga tushadigan funksiya:
-    1. Profil musiqasi → fingerprint → o'chiradi
-    2. Shaxsiy kanal musiqalari → fingerprint → o'chiradi
-    full_info: allaqachon olingan GetFullUserRequest natijasi (agar bor bo'lsa)
-    """
-    await music_mod.init_music_db()
-    BASE_DIR_LOCAL = os.path.dirname(os.path.abspath(__file__))
-
-    try:
-        # Agar full_info berilmagan bo'lsa — yangi so'rov yuborish
-        if full_info is not None:
-            fi = full_info
-        else:
-            try:
-                fi = await userbot(GetFullUserRequest(uid))
-            except FloodWaitError as e:
-                log_flood("_scan_user_music", e.seconds)
-                await asyncio.sleep(min(e.seconds + 3, 600))
-                fi = await userbot(GetFullUserRequest(uid))
-        fu = fi.full_user
-
-        # 1. Profil musiqalari
-        music_docs = []
-        for field in ['saved_music', 'profile_song', 'profile_songs', 'music']:
-            val = getattr(fu, field, None)
-            if val is None:
-                continue
-            if isinstance(val, list):
-                music_docs.extend(val)
-            else:
-                music_docs.append(val)
-
-        for idx, doc in enumerate(music_docs):
-            if hasattr(doc, 'document'):
-                doc = doc.document
-            if not hasattr(doc, 'id'):
-                continue
-            tmp_path = os.path.join(BASE_DIR_LOCAL, f"tmp_profile_{uid}_{idx}.ogg")
-            try:
-                await userbot.download_media(doc, file=tmp_path)
-                if os.path.exists(tmp_path):
-                    fp, duration = await music_mod.get_fingerprint_async(tmp_path)
-                    if fp:
-                        await music_mod.save_fingerprint(
-                            str(uid), f"Profil: {name}",
-                            f"profile_{uid}_{idx}", fp, duration or 0
-                        )
-            except Exception:
-                pass
-            finally:
-                if os.path.exists(tmp_path):
-                    os.remove(tmp_path)
-
-    except Exception:
-        pass
-
-    # 2. Shaxsiy kanal musiqalari
-    if channel_link and channel_link.startswith('http'):
-        try:
-            entity = await userbot.get_entity(channel_link)
-            channel_id   = str(entity.id)
-            channel_name = getattr(entity, 'title', channel_link)
-
-            audio_msgs  = []
-            _usr_cache  = []
-            _usr_src    = channel_link
-            async for msg in userbot.iter_messages(entity, limit=None):
-                if is_music_file(msg):
-                    audio_msgs.append(msg)
-                if msg.text and len(msg.text) > 2:
-                    _s = msg.sender
-                    _sid = getattr(_s, 'id', msg.sender_id or 0) if _s else (msg.sender_id or 0)
-                    _sname, _sun = "", ""
-                    if _s and hasattr(_s, 'first_name'):
-                        _sname = (((_s.first_name or "") + " " + (_s.last_name or "")).strip())
-                        _sun   = getattr(_s, 'username', '') or ""
-                    _dt = msg.date.strftime("%Y-%m-%d %H:%M") if msg.date else ""
-                    _usr_cache.append((msg.id, _usr_src, _sid, _sname, _sun, msg.text[:2000], _dt))
-                    if len(_usr_cache) >= 300:
-                        try:
-                            async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
-                                await _db.executemany(
-                                    "INSERT OR IGNORE INTO messages_cache "
-                                    "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
-                                    "VALUES (?,?,?,?,?,?,?)", _usr_cache
-                                )
-                                await _db.commit()
-                        except Exception:
-                            pass
-                        _usr_cache = []
-            if _usr_cache:
-                try:
-                    async with aiosqlite.connect(db_mod.DB_NAME, timeout=10) as _db:
-                        await _db.executemany(
-                            "INSERT OR IGNORE INTO messages_cache "
-                            "(msg_id,source,sender_id,sender_name,sender_username,text,msg_date) "
-                            "VALUES (?,?,?,?,?,?,?)", _usr_cache
-                        )
-                        await _db.commit()
-                except Exception:
-                    pass
-
-            async def _dl2(m):
-                tmp = os.path.join(BASE_DIR_LOCAL, f"tmp_ch_{channel_id}_{m.id}.ogg")
-                for attempt in range(3):
-                    try:
-                        await m.download_media(file=tmp)
-                        if os.path.exists(tmp) and os.path.getsize(tmp) > 0:
-                            return (m.id, tmp)
-                        if os.path.exists(tmp):
-                            os.remove(tmp)
-                    except Exception:
-                        if os.path.exists(tmp):
-                            os.remove(tmp)
-                return (m.id, None)
-
-            BATCH = 3  # i3/i5 uchun: 3 parallel yuklab olish
-            for i in range(0, len(audio_msgs), BATCH):
-                batch = audio_msgs[i:i+BATCH]
-                dl_results = await asyncio.gather(*[_dl2(m) for m in batch])
-                for msg_id, tmp in dl_results:
-                    if tmp and os.path.exists(tmp):
-                        try:
-                            fp, dur = await music_mod.get_fingerprint_async(tmp)
-                            if fp:
-                                await music_mod.save_fingerprint(
-                                    channel_id, channel_name,
-                                    f"msg_{msg_id}", fp, dur or 0
-                                )
-                        except Exception:
-                            pass
-                        finally:
-                            if os.path.exists(tmp):
-                                os.remove(tmp)
-
-                await asyncio.sleep(1)
-
-        except Exception:
-            pass
-
 
 # ─────────────────────────────────────────────────────────────────────
 # YANGI MAXFIY KANAL MONITOR
