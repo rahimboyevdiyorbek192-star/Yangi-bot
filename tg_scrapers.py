@@ -708,9 +708,9 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                                         elif _pc_title:
                                             _shaxsiy = _pc_title
                                         else:
-                                            _shaxsiy = str(pc)
+                                            _shaxsiy = f"https://t.me/c/{pc}/1"
                                     except Exception:
-                                        _shaxsiy = str(pc)
+                                        _shaxsiy = f"https://t.me/c/{pc}/1"
                                     asyncio.ensure_future(_save_pc_id_to_cache(pc))
                                 if inv:
                                     async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as _db:
@@ -864,9 +864,9 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                         elif pc_title:
                             shaxsiy = pc_title
                         else:
-                            shaxsiy = str(pc)
+                            shaxsiy = f"https://t.me/c/{pc}/1"
                     except Exception:
-                        shaxsiy = str(pc)
+                        shaxsiy = f"https://t.me/c/{pc}/1"
                     asyncio.ensure_future(_save_pc_id_to_cache(pc))
                 if inv:
                     async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as _db:
@@ -1347,11 +1347,11 @@ async def background_profile_tracker(userbot, shard: int = 0, total_shards: int 
                             elif ch_title:
                                 has_hidden = ch_title
                             else:
-                                has_hidden = str(ch_id)
+                                has_hidden = f"https://t.me/c/{ch_id}/1"
                         except ChannelPrivateError:
-                            has_hidden = f"🔒 Maxfiy (ID:{ch_id})"
+                            has_hidden = f"https://t.me/c/{ch_id}/1"
                         except Exception:
-                            has_hidden = str(ch_id)
+                            has_hidden = f"https://t.me/c/{ch_id}/1"
 
                     open_ch = ", ".join(extract_bio_links(bio)) or "Yo'q"
 
@@ -1642,9 +1642,9 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
                         elif pc_title:
                             shaxsiy = pc_title
                         else:
-                            shaxsiy = str(ch_id)
+                            shaxsiy = f"https://t.me/c/{ch_id}/1"
                     except Exception:
-                        shaxsiy = str(ch_id)
+                        shaxsiy = f"https://t.me/c/{ch_id}/1"
                     asyncio.ensure_future(_save_pc_id_to_cache(ch_id))
             except FloodWaitError as e:
                 _record_flood(e.seconds)
@@ -1914,9 +1914,9 @@ async def scan_channel_comments(userbot, target, output_path, status_msg,
                             elif pc_title:
                                 shaxsiy = pc_title
                             else:
-                                shaxsiy = str(ch_id)
+                                shaxsiy = f"https://t.me/c/{ch_id}/1"
                         except Exception:
-                            shaxsiy = str(ch_id)
+                            shaxsiy = f"https://t.me/c/{ch_id}/1"
                         asyncio.ensure_future(_save_pc_id_to_cache(ch_id))
                 except FloodWaitError as e:
                     _record_flood(e.seconds)
