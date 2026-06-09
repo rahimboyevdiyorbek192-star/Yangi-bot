@@ -430,7 +430,43 @@ async def _resolve_pc_link(ub, ch_id: int) -> str:
         return link
 
 
-async def resolve_personal_channel(userbot, ch_id):
+def _pc_entity_from_full(fi, ch_id: int):
+    """GetFullUserRequest javobidagi fi.chats dan personal channel entity oladi.
+    Telegram API uni avtomatik yuboradi — extra API call kerak emas."""
+    for chat in getattr(fi, 'chats', []):
+        if getattr(chat, 'id', None) == ch_id:
+            return chat
+    return None
+
+
+def _format_pc_link(ent, ch_id: int) -> str:
+    """Channel entity dan Shaxsiy Kanal linkini formatlaydi."""
+    if ent is None:
+        return f"https://t.me/c/{ch_id}/1"
+    uname = getattr(ent, 'username', None)
+    title = getattr(ent, 'title', '') or ''
+    if uname:
+        return f"https://t.me/{uname} ({title})" if title else f"https://t.me/{uname}"
+    return title or f"https://t.me/c/{ch_id}/1"
+
+
+async def _resolve_pc(fi, ch_id: int, ub) -> str:
+    """
+    personal_channel_id → link:
+    1. fi.chats — GetFullUserRequest javobi (extra API call yo'q)
+    2. PeerChannel cache — backup
+    3. Fallback: t.me/c/{id}/1
+    """
+    ent = _pc_entity_from_full(fi, ch_id)
+    if ent is None:
+        try:
+            ent = await asyncio.wait_for(ub.get_entity(PeerChannel(ch_id)), timeout=8)
+        except Exception:
+            pass
+    return _format_pc_link(ent, ch_id)
+
+
+
     """
     Shaxsiy kanal linkini hal qiladi.
     Numeric ID ni resolved_channel_ids jadvaliga saqlaydi (keshlayd).
@@ -697,20 +733,7 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                                 _ochiq = ", ".join(oc) if oc else ""
                                 pc  = getattr(fu, 'personal_channel_id', None)
                                 if pc:
-                                    try:
-                                        _pc_e     = await asyncio.wait_for(
-                                            userbot.get_entity(PeerChannel(pc)), timeout=8
-                                        )
-                                        _pc_un    = getattr(_pc_e, 'username', None)
-                                        _pc_title = getattr(_pc_e, 'title', '') or ''
-                                        if _pc_un:
-                                            _shaxsiy = f"https://t.me/{_pc_un} ({_pc_title})" if _pc_title else f"https://t.me/{_pc_un}"
-                                        elif _pc_title:
-                                            _shaxsiy = _pc_title
-                                        else:
-                                            _shaxsiy = f"https://t.me/c/{pc}/1"
-                                    except Exception:
-                                        _shaxsiy = f"https://t.me/c/{pc}/1"
+                                    _shaxsiy = await _resolve_pc(fi, pc, userbot)
                                     asyncio.ensure_future(_save_pc_id_to_cache(pc))
                                 if inv:
                                     async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as _db:
@@ -853,20 +876,7 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                 ochiq = ", ".join(oc) if oc else ""
                 pc = getattr(fu, 'personal_channel_id', None)
                 if pc:
-                    try:
-                        pc_ent    = await asyncio.wait_for(
-                            userbot.get_entity(PeerChannel(pc)), timeout=8
-                        )
-                        pc_uname  = getattr(pc_ent, 'username', None)
-                        pc_title  = getattr(pc_ent, 'title', '') or ''
-                        if pc_uname:
-                            shaxsiy = f"https://t.me/{pc_uname} ({pc_title})" if pc_title else f"https://t.me/{pc_uname}"
-                        elif pc_title:
-                            shaxsiy = pc_title
-                        else:
-                            shaxsiy = f"https://t.me/c/{pc}/1"
-                    except Exception:
-                        shaxsiy = f"https://t.me/c/{pc}/1"
+                    shaxsiy = await _resolve_pc(fi, pc, userbot)
                     asyncio.ensure_future(_save_pc_id_to_cache(pc))
                 if inv:
                     async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as _db:
@@ -1338,20 +1348,7 @@ async def background_profile_tracker(userbot, shard: int = 0, total_shards: int 
                             await db.commit()
                     elif getattr(fi.full_user, 'personal_channel_id', None):
                         ch_id = fi.full_user.personal_channel_id
-                        try:
-                            ch_ent    = await userbot.get_entity(PeerChannel(ch_id))
-                            ch_user   = getattr(ch_ent, 'username', None)
-                            ch_title  = getattr(ch_ent, 'title', '') or ''
-                            if ch_user:
-                                has_hidden = f"https://t.me/{ch_user} ({ch_title})" if ch_title else f"https://t.me/{ch_user}"
-                            elif ch_title:
-                                has_hidden = ch_title
-                            else:
-                                has_hidden = f"https://t.me/c/{ch_id}/1"
-                        except ChannelPrivateError:
-                            has_hidden = f"https://t.me/c/{ch_id}/1"
-                        except Exception:
-                            has_hidden = f"https://t.me/c/{ch_id}/1"
+                        has_hidden = await _resolve_pc(fi, ch_id, userbot)
 
                     open_ch = ", ".join(extract_bio_links(bio)) or "Yo'q"
 
@@ -1631,20 +1628,7 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
                         await db.commit()
                 ch_id = getattr(fi.full_user, 'personal_channel_id', None)
                 if ch_id:
-                    try:
-                        pc_ent    = await asyncio.wait_for(
-                            userbot.get_entity(PeerChannel(ch_id)), timeout=8
-                        )
-                        pc_uname  = getattr(pc_ent, 'username', None)
-                        pc_title  = getattr(pc_ent, 'title', '') or ''
-                        if pc_uname:
-                            shaxsiy = f"https://t.me/{pc_uname} ({pc_title})" if pc_title else f"https://t.me/{pc_uname}"
-                        elif pc_title:
-                            shaxsiy = pc_title
-                        else:
-                            shaxsiy = f"https://t.me/c/{ch_id}/1"
-                    except Exception:
-                        shaxsiy = f"https://t.me/c/{ch_id}/1"
+                    shaxsiy = await _resolve_pc(fi, ch_id, userbot)
                     asyncio.ensure_future(_save_pc_id_to_cache(ch_id))
             except FloodWaitError as e:
                 _record_flood(e.seconds)
@@ -1903,20 +1887,7 @@ async def scan_channel_comments(userbot, target, output_path, status_msg,
                             await db.commit()
                     ch_id = getattr(fi.full_user, 'personal_channel_id', None)
                     if ch_id:
-                        try:
-                            pc_ent    = await asyncio.wait_for(
-                                userbot.get_entity(PeerChannel(ch_id)), timeout=8
-                            )
-                            pc_uname  = getattr(pc_ent, 'username', None)
-                            pc_title  = getattr(pc_ent, 'title', '') or ''
-                            if pc_uname:
-                                shaxsiy = f"https://t.me/{pc_uname} ({pc_title})" if pc_title else f"https://t.me/{pc_uname}"
-                            elif pc_title:
-                                shaxsiy = pc_title
-                            else:
-                                shaxsiy = f"https://t.me/c/{ch_id}/1"
-                        except Exception:
-                            shaxsiy = f"https://t.me/c/{ch_id}/1"
+                        shaxsiy = await _resolve_pc(fi, ch_id, userbot)
                         asyncio.ensure_future(_save_pc_id_to_cache(ch_id))
                 except FloodWaitError as e:
                     _record_flood(e.seconds)
