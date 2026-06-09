@@ -1275,14 +1275,15 @@ async def background_profile_tracker(userbot):
                                             )
                                         hits = await music_mod.check_against_watch_list(fp)
                                         for hit in hits:
-                                            _WATCH_ALERTS.put_nowait({
-                                                'admin_id':    hit['admin_id'],
-                                                'watch_name':  hit['watch_name'],
-                                                'score':       hit['score'],
-                                                'source_name': f"Profil: {uid}",
-                                                'source_id':   str(uid),
-                                                'source_type': 'profil'
-                                            })
+                                            if _WATCH_ALERTS is not None:
+                                                _WATCH_ALERTS.put_nowait({
+                                                    'admin_id':    hit['admin_id'],
+                                                    'watch_name':  hit['watch_name'],
+                                                    'score':       hit['score'],
+                                                    'source_name': f"Profil: {uid}",
+                                                    'source_id':   str(uid),
+                                                    'source_type': 'profil'
+                                                })
                             except Exception:
                                 pass
                             finally:
@@ -2226,14 +2227,15 @@ async def _music_process_one_source(userbot, source, userbot_idx=0):
                     audio_count[0] += 1
                     hits = await music_mod.check_against_watch_list(fp)
                     for hit in hits:
-                        _WATCH_ALERTS.put_nowait({
-                            'admin_id':    hit['admin_id'],
-                            'watch_name':  hit['watch_name'],
-                            'score':       hit['score'],
-                            'source_name': channel_name,
-                            'source_id':   channel_id,
-                            'source_type': 'kanal'
-                        })
+                        if _WATCH_ALERTS is not None:
+                            _WATCH_ALERTS.put_nowait({
+                                'admin_id':    hit['admin_id'],
+                                'watch_name':  hit['watch_name'],
+                                'score':       hit['score'],
+                                'source_name': channel_name,
+                                'source_id':   channel_id,
+                                'source_type': 'kanal'
+                            })
             except Exception:
                 pass
             finally:
@@ -3045,14 +3047,15 @@ async def _scan_channel_music_after_join(userbot, bot, admin_id, entity, ch_link
                             music_count += 1
                             hits = await music_mod.check_against_watch_list(fp)
                             for hit in hits:
-                                _WATCH_ALERTS.put_nowait({
-                                    'admin_id':    hit['admin_id'],
-                                    'watch_name':  hit['watch_name'],
-                                    'score':       hit['score'],
-                                    'source_name': channel_name,
-                                    'source_id':   channel_id,
-                                    'source_type': 'kanal'
-                                })
+                                if _WATCH_ALERTS is not None:
+                                    _WATCH_ALERTS.put_nowait({
+                                        'admin_id':    hit['admin_id'],
+                                        'watch_name':  hit['watch_name'],
+                                        'score':       hit['score'],
+                                        'source_name': channel_name,
+                                        'source_id':   channel_id,
+                                        'source_type': 'kanal'
+                                    })
                     except Exception:
                         pass
                     finally:

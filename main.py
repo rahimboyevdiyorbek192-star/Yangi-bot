@@ -1844,32 +1844,19 @@ async def watch_alert_sender():
                     alert['watch_name'], source_name, source_id,
                     source_type, alert['score']
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("watch_alert_log yozishda xato: %s", e)
 
             for admin_id in all_admins:
                 try:
                     await bot.send_message(admin_id, msg_text)
                     await asyncio.sleep(0.1)  # Telegram 30 msg/s chegarasidan o'tmaslik
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                except Exception as e:
+                    logger.debug("Alert xabar yuborishda xato (admin=%s): %s", admin_id, e)
+        except Exception as e:
+            logger.error("watch_alert_sender xato: %s", e)
         finally:
             engine._WATCH_ALERTS.task_done()
-
-    # ── Alert xabarlari uchun handler ──────────────────────────────
-    # (yuqoridagi loop dan keyin hech qachon yetib kelmaydi, lekin xavfsizlik uchun)
-
-
-async def _handle_alert_queue_item(item):
-    """Alert queue dan kelgan xabarni qayta ishlash."""
-    try:
-        kind, data = item
-        if kind == 'alert':
-            await process_alert_hits([data])
-    except Exception:
-        pass
 
 
 @bot.on(events.NewMessage(pattern='/clean_tmp'))

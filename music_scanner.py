@@ -600,7 +600,7 @@ async def check_against_watch_list(fingerprint, threshold=0.70):
 
 
 async def save_watch_alert_log(watch_name, source_name, source_id, source_type, score):
-    """Topilgan musiqa arxivga saqlanadi."""
+    """Topilgan musiqa arxivga saqlanadi. Bir xil (watch_name, source_id) takrorlanmaydi."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     await init_music_db()
     async with aiosqlite.connect(MUSIC_DB, timeout=30) as db:
@@ -608,13 +608,15 @@ async def save_watch_alert_log(watch_name, source_name, source_id, source_type, 
             "CREATE TABLE IF NOT EXISTS watch_alerts_log "
             "(id INTEGER PRIMARY KEY AUTOINCREMENT, watch_name TEXT, "
             "source_name TEXT, source_id TEXT, source_type TEXT, "
-            "score REAL, found_date TEXT)"
+            "score REAL, found_date TEXT, "
+            "UNIQUE(watch_name, source_id))"
         )
+        # INSERT OR REPLACE — yangi o'xshashlik ko'rsatkichi bilan yangilaydi
         await db.execute(
-            "INSERT INTO watch_alerts_log "
+            "INSERT OR REPLACE INTO watch_alerts_log "
             "(watch_name, source_name, source_id, source_type, score, found_date) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            (watch_name, source_name, source_id, source_type, score, now)
+            (watch_name, source_name, str(source_id), source_type, score, now)
         )
         await db.commit()
 
