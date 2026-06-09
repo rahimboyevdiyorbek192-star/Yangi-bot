@@ -890,7 +890,15 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
             except FloodWaitError as e:
                 _record_flood(e.seconds)
                 log_flood("deep_scan_group", e.seconds)
-                await asyncio.sleep(min(e.seconds + 2, 120))
+                wait_sec = min(e.seconds + 2, 120)
+                try:
+                    await status_msg.edit(
+                        f"⏳ **FloodWait:** {e.seconds}s kutilmoqda...\n"
+                        f"🔍 `{count}/{total}` ta profil | Ko'rildi: {_wi + 1}/{len(work_list)}"
+                    )
+                except Exception:
+                    pass
+                await asyncio.sleep(wait_sec)
             except Exception:
                 pass
 
@@ -902,6 +910,15 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
             is_premium = "✅" if getattr(user, "premium", False) else "❌"
 
             if not first_name and not last_name and not uname and not bio:
+                # Status — har 50 ta bo'sh profilda ham yangilab turish (qotib qolmaslik)
+                if (_wi + 1) % 50 == 0:
+                    try:
+                        await status_msg.edit(
+                            f"🔍 **Skanerlamoqda:** `{count}/{total}` ta profil\n"
+                            f"_(Ko'rildi: {_wi + 1}/{len(work_list)})_"
+                        )
+                    except Exception:
+                        pass
                 continue
 
             profile_url = (f"https://t.me/{user.username}" if user.username
@@ -932,11 +949,12 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                 await _sv_loop.run_in_executor(None, wb.save, output_path)
                 await db_mod.update_scan_progress(scan_id, resume_offset + _wi + 1, count)
 
-            # Status yangilash — har 100 ta profilda
-            if count % 100 == 0:
+            # Status yangilash — har 50 ta profilda (eski 100 o'rniga)
+            if count % 50 == 0:
                 try:
                     await status_msg.edit(
-                        f"🔍 **Skanerlamoqda:** `{count}/{total}` ta profil..."
+                        f"🔍 **Skanerlamoqda:** `{count}/{total}` ta profil\n"
+                        f"_(Ko'rildi: {_wi + 1}/{len(work_list)})_"
                     )
                 except Exception:
                     pass
@@ -1635,6 +1653,13 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
             except FloodWaitError as e:
                 _record_flood(e.seconds)
                 log_flood("scan_messages_user", e.seconds)
+                try:
+                    await status_msg.edit(
+                        f"⏳ **FloodWait:** {e.seconds}s kutilmoqda...\n"
+                        f"🔍 `{count}/{total}` ta profil"
+                    )
+                except Exception:
+                    pass
                 await asyncio.sleep(min(e.seconds + 2, 120))
             except Exception:
                 pass
@@ -1895,6 +1920,13 @@ async def scan_channel_comments(userbot, target, output_path, status_msg,
                 except FloodWaitError as e:
                     _record_flood(e.seconds)
                     log_flood("scan_channel_comments", e.seconds)
+                    try:
+                        await status_msg.edit(
+                            f"⏳ **FloodWait:** {e.seconds}s kutilmoqda...\n"
+                            f"🔍 `{_progress[0]}/{total}` ta profil"
+                        )
+                    except Exception:
+                        pass
                     await asyncio.sleep(min(e.seconds + 2, 120))
                 except Exception:
                     pass
