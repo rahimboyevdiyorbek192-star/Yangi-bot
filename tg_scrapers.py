@@ -690,10 +690,9 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                                             userbot.get_entity(pc), timeout=8
                                         )
                                         _pc_un = getattr(_pc_e, 'username', None)
-                                        _shaxsiy = (f"https://t.me/{_pc_un}" if _pc_un
-                                                    else f"https://t.me/c/{pc}/1")
+                                        _shaxsiy = f"https://t.me/{_pc_un}" if _pc_un else ""
                                     except Exception:
-                                        _shaxsiy = f"https://t.me/c/{pc}/1"
+                                        _shaxsiy = ""
                                     asyncio.ensure_future(_save_pc_id_to_cache(pc))
                                 if inv:
                                     async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as _db:
@@ -841,10 +840,9 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
                             userbot.get_entity(pc), timeout=8
                         )
                         pc_uname = getattr(pc_ent, 'username', None)
-                        shaxsiy  = (f"https://t.me/{pc_uname}" if pc_uname
-                                    else f"https://t.me/c/{pc}/1")
+                        shaxsiy  = f"https://t.me/{pc_uname}" if pc_uname else ""
                     except Exception:
-                        shaxsiy = f"https://t.me/c/{pc}/1"
+                        shaxsiy = ""
                     asyncio.ensure_future(_save_pc_id_to_cache(pc))
                 if inv:
                     async with aiosqlite.connect(db_mod.DB_NAME, timeout=30) as _db:
@@ -1319,7 +1317,7 @@ async def background_profile_tracker(userbot, shard: int = 0, total_shards: int 
                         try:
                             ch_ent  = await userbot.get_entity(ch_id)
                             ch_user = getattr(ch_ent, 'username', None)
-                            has_hidden = f"https://t.me/{ch_user}" if ch_user else f"https://t.me/c/{ch_id}/1"
+                            has_hidden = f"https://t.me/{ch_user}" if ch_user else ""
                         except ChannelPrivateError:
                             has_hidden = f"🔒 Maxfiy (ID:{ch_id})"
                         except Exception:
@@ -1608,10 +1606,9 @@ async def scan_messages(userbot, target, output_path, status_msg, days=None,
                             userbot.get_entity(ch_id), timeout=8
                         )
                         pc_uname = getattr(pc_ent, 'username', None)
-                        shaxsiy  = (f"https://t.me/{pc_uname}" if pc_uname
-                                    else f"https://t.me/c/{ch_id}/1")
+                        shaxsiy  = f"https://t.me/{pc_uname}" if pc_uname else ""
                     except Exception:
-                        shaxsiy = f"https://t.me/c/{ch_id}/1"
+                        shaxsiy = ""
                     asyncio.ensure_future(_save_pc_id_to_cache(ch_id))
             except FloodWaitError as e:
                 _record_flood(e.seconds)
@@ -1875,10 +1872,9 @@ async def scan_channel_comments(userbot, target, output_path, status_msg,
                                 userbot.get_entity(ch_id), timeout=8
                             )
                             pc_uname = getattr(pc_ent, 'username', None)
-                            shaxsiy  = (f"https://t.me/{pc_uname}" if pc_uname
-                                        else f"https://t.me/c/{ch_id}/1")
+                            shaxsiy  = f"https://t.me/{pc_uname}" if pc_uname else ""
                         except Exception:
-                            shaxsiy = f"https://t.me/c/{ch_id}/1"
+                            shaxsiy = ""
                         asyncio.ensure_future(_save_pc_id_to_cache(ch_id))
                 except FloodWaitError as e:
                     _record_flood(e.seconds)
