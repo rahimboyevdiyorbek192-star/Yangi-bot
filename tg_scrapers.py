@@ -626,15 +626,12 @@ async def deep_scan_group(userbot, target_group, output_path, status_msg,
         _src_str = str(target_group)
         _iter_offset_id = 0
         _iter_done = False
-        _iter_batch_num = 0          # har 2000 xabarda userbot almashadi
         _MSG_BATCH = 2000
         while not _iter_done:
-            # Har batch uchun navbatdagi userbot — iter_messages yukini teng bo'lish
-            _iter_ub = _ub_pool[_iter_batch_num % _ub_count]
-            _iter_batch_num += 1
+            # iter_messages har doim userbot1 — userbot2 guruh a'zosi bo'lmasligi mumkin
             _batch_msg_count = 0
             try:
-                async for msg in _iter_ub.iter_messages(
+                async for msg in userbot.iter_messages(
                     entity, limit=_MSG_BATCH,
                     offset_id=_iter_offset_id, reverse=False
                 ):
