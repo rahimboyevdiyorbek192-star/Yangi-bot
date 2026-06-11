@@ -2369,6 +2369,12 @@ async def _run_phishing_check(sender_id, message):
                         await bot.send_message(sender_id, header + report, parse_mode='md')
                     except Exception:
                         await bot.send_message(sender_id, header + report)
+                    if is_apk:
+                        await bot.send_message(
+                            sender_id,
+                            "📡 **Dinamik tahlil** — APKni real qurilma/emulyatorda ishga tushirib trafikni kuzatish:",
+                            buttons=[Button.inline("📡 Dinamik Tahlil Ko'rsatmasi", data="apk_dyn_guide")]
+                        )
                 finally:
                     try:
                         os.remove(tmp_path)
@@ -3897,6 +3903,49 @@ async def process_alert_hits(hits: list):
             await bot.send_message(hit['admin_id'], text, link_preview=False)
         except Exception:
             pass
+
+
+@bot.on(events.CallbackQuery(pattern=b"apk_dyn_guide"))
+async def apk_dyn_guide_callback(event):
+    await event.answer()
+    guide = (
+        "📡 **Dinamik APK Tahlili — Ko'rsatma**\n\n"
+        "Ushbu usul APK ishga tushganda yuboradigan barcha tarmoq so'rovlarini ko'rish imkonini beradi.\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "**1-qadam: NoxPlayer o'rnatish (kompyuterda)**\n"
+        "• [noxappplayer.com](https://www.noxappplayer.com) dan yuklab oling\n"
+        "• O'rnatib ishga tushiring\n"
+        "• `Sozlamalar → Telefon → Root` ni **yoqing** ✅\n"
+        "• Emulyatorni qayta yuklang\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "**2-qadam: HttpCanary o'rnatish (emulyator ichida)**\n"
+        "• Emulyator ichidagi brauzerdan HttpCanary APK ni yuklab oling\n"
+        "  _(HttpCanary — Yellow Duck)_\n"
+        "• O'rnating va ishga tushiring\n"
+        "• Birinchi ishga tushirganda sertifikat o'rnatishni so'raydi → **Ruxsat bering** ✅\n"
+        "• `Sozlamalar → SSL Sertifikati → System Trusted` ni tanlang\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "**3-qadam: Tekshiriladigan APK ni o'rnatish**\n"
+        "• Shubhali APK ni emulyatorga torting yoki `adb install fayl.apk` bilan o'rnating\n"
+        "• HttpCanary da yozib olishni **boshlang** ▶️\n"
+        "• APK ni oching va barcha funksiyalarni sinab ko'ring\n"
+        "  (login, ro'yxatdan o'tish, asosiy ekranlar)\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "**4-qadam: Natijalarni tahlil qilish**\n"
+        "• HttpCanary da yozib olishni **to'xtating** ⏹️\n"
+        "• So'rovlar ro'yxatida shubhali domenlarni izlang:\n"
+        "  — Noma'lum serverlar (IP manzillar)\n"
+        "  — `http://` (shifrsiz) ulanishlar\n"
+        "  — Maxfiy ma'lumotlar (parol, IMEI, kontaktlar) uzatilishi\n"
+        "• `Eksport → HAR fayl` orqali saqlang va botga yuboring\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "⚠️ **Ehtiyot bo'ling:** Shubhali APK ni hech qachon asosiy qurilmangizga o'rnatmang!\n"
+        "Faqat emulyator yoki alohida test qurilmasida sinab ko'ring."
+    )
+    try:
+        await event.respond(guide, parse_mode='md', link_preview=False)
+    except Exception:
+        await event.respond(guide, link_preview=False)
 
 
 async def main():
