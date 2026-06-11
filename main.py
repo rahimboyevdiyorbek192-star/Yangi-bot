@@ -2351,7 +2351,7 @@ async def _run_phishing_check(sender_id, message):
 
             if is_apk or is_ogg:
                 ftype = "APK" if is_apk else "OGG/Audio"
-                await bot.send_message(sender_id,
+                static_msg = await bot.send_message(sender_id,
                     f"⏳ **{ftype} fayl tahlil qilinmoqda...**\n"
                     f"📎 `{fname}`\n"
                     f"_(Yuklab olinmoqda...)_"
@@ -2366,15 +2366,37 @@ async def _run_phishing_check(sender_id, message):
                         report, score = await phish_mod.analyze_ogg(tmp_path)
                         header = "🎵 **OGG/Audio Tahlil Hisoboti:**\n\n"
                     try:
-                        await bot.send_message(sender_id, header + report, parse_mode='md')
+                        await static_msg.edit(header + report, parse_mode='md')
                     except Exception:
-                        await bot.send_message(sender_id, header + report)
+                        await static_msg.edit(header + report)
+
                     if is_apk:
-                        await bot.send_message(
+                        dyn_msg = await bot.send_message(
                             sender_id,
-                            "📡 **Dinamik tahlil** — APKni real qurilma/emulyatorda ishga tushirib trafikni kuzatish:",
-                            buttons=[Button.inline("📡 Dinamik Tahlil Ko'rsatmasi", data="apk_dyn_guide")]
+                            "🧪 **Dinamik tahlil boshlandi...**\n_(VT sandbox tekshirilmoqda)_"
                         )
+
+                        async def _upd_dyn(txt: str):
+                            try:
+                                await dyn_msg.edit(txt)
+                            except Exception:
+                                pass
+
+                        dyn_report, has_dyn = await phish_mod.analyze_apk_dynamic(
+                            tmp_path, status_callback=_upd_dyn
+                        )
+                        dyn_header = "🧪 **Dinamik Tahlil Hisoboti:**\n\n"
+                        try:
+                            await dyn_msg.edit(dyn_header + dyn_report, parse_mode='md')
+                        except Exception:
+                            await dyn_msg.edit(dyn_header + dyn_report)
+
+                        if not has_dyn:
+                            await bot.send_message(
+                                sender_id,
+                                "📋 Manual dinamik tahlil ko'rsatmasi:",
+                                buttons=[Button.inline("📡 NoxPlayer + HttpCanary Ko'rsatmasi", data="apk_dyn_guide")]
+                            )
                 finally:
                     try:
                         os.remove(tmp_path)

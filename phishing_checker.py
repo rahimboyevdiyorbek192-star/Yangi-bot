@@ -1102,6 +1102,224 @@ async def analyze_apk(file_path: str) -> tuple:
 
 
 # ══════════════════════════════════════════════════════════════════════
+# 📡 APK DINAMIK TAHLIL (VT Sandbox)
+# ══════════════════════════════════════════════════════════════════════
+
+def _vt_upload_file(file_path: str, vt_key: str) -> str | None:
+    """APK faylni VT ga yuklaydi, analysis ID qaytaradi."""
+    try:
+        file_size = os.path.getsize(file_path)
+        # VT free: 32MB, premium: 650MB
+        if file_size > 32 * 1024 * 1024:
+            return "__too_large__"
+        with open(file_path, 'rb') as f:
+            resp = requests.post(
+                "https://www.virustotal.com/api/v3/files",
+                headers={"x-apikey": vt_key},
+                files={"file": (os.path.basename(file_path), f, "application/vnd.android.package-archive")},
+                timeout=120
+            )
+        if resp.status_code == 200:
+            return resp.json().get("data", {}).get("id")
+        logger.warning("VT upload HTTP %s: %s", resp.status_code, resp.text[:200])
+    except Exception as e:
+        logger.warning("VT upload xato: %s", e)
+    return None
+
+
+def _vt_poll_analysis(analysis_id: str, vt_key: str) -> dict:
+    """VT analysis holatini tekshiradi."""
+    try:
+        resp = requests.get(
+            f"https://www.virustotal.com/api/v3/analyses/{analysis_id}",
+            headers={"x-apikey": vt_key},
+            timeout=15
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            attrs = data.get("data", {}).get("attributes", {})
+            sha256 = data.get("meta", {}).get("file_info", {}).get("sha256", "")
+            return {"status": attrs.get("status", ""), "sha256": sha256}
+    except Exception as e:
+        logger.warning("VT poll xato: %s", e)
+    return {}
+
+
+def _vt_get_behaviours(sha256: str, vt_key: str) -> list | None:
+    """
+    VT sandbox behavioral ma'lumotlar.
+    None = fayl VT da yo'q (404).
+    [] = fayl bor, lekin sandbox yo'q.
+    [...] = sandbox data mavjud.
+    """
+    try:
+        resp = requests.get(
+            f"https://www.virustotal.com/api/v3/files/{sha256}/behaviours",
+            headers={"x-apikey": vt_key},
+            timeout=15
+        )
+        if resp.status_code == 200:
+            return resp.json().get("data", [])
+        if resp.status_code == 404:
+            return None
+        logger.warning("VT behaviours HTTP %s", resp.status_code)
+    except Exception as e:
+        logger.warning("VT behaviours xato: %s", e)
+    return []
+
+
+def _format_vt_behaviours(sandbox_list: list) -> str:
+    dns_all   = set()
+    http_all  = []
+    ip_all    = set()
+    files_wr  = set()
+    procs     = set()
+    sus_calls = []
+    sandbox_names = []
+
+    for sb in sandbox_list:
+        attrs = sb.get("attributes", {})
+        name = attrs.get("sandbox_name", "")
+        if name:
+            sandbox_names.append(name)
+        net = attrs.get("network_communications", {})
+
+        for dns in net.get("dns_lookups", []):
+            h = dns.get("hostname", "")
+            if h:
+                dns_all.add(h)
+
+        for http in net.get("http_conversations", []):
+            url = http.get("url", "")
+            method = http.get("request_method", "GET")
+            if url:
+                http_all.append((method, url))
+
+        for ip in net.get("ip_traffic", []):
+            dest = ip.get("destination_ip", "")
+            port = ip.get("destination_port", "")
+            proto = ip.get("transport_layer_protocol", "")
+            if dest:
+                ip_all.add(f"{dest}:{port}" if port else dest)
+
+        for fpath in attrs.get("files_written", []):
+            if fpath:
+                files_wr.add(fpath)
+
+        for p in attrs.get("processes_created", []):
+            if p:
+                procs.add(p)
+
+        for call in attrs.get("calls_highlighted", []):
+            if call:
+                sus_calls.append(call)
+
+    lines = ["🧪 *VT Sandbox Dinamik Tahlil*\n"]
+    if sandbox_names:
+        lines.append(f"🏷 *Sandbox:* {', '.join(set(sandbox_names))}\n")
+
+    if dns_all:
+        lines.append(f"🌐 *DNS So'rovlar ({len(dns_all)} ta):*")
+        for d in sorted(dns_all)[:15]:
+            lines.append(f"  • `{d}`")
+
+    if http_all:
+        lines.append(f"\n📡 *HTTP So'rovlar ({len(http_all)} ta):*")
+        for method, url in http_all[:12]:
+            icon = "🔴" if url.startswith("http://") else "⚪"
+            lines.append(f"  {icon} `{method} {url[:75]}`")
+
+    if ip_all:
+        lines.append(f"\n🖥 *IP Ulanishlar ({len(ip_all)} ta):*")
+        for ip in sorted(ip_all)[:10]:
+            lines.append(f"  • `{ip}`")
+
+    if sus_calls:
+        lines.append(f"\n⚠️ *Shubhali API Chaqiriqlar:*")
+        for call in sus_calls[:8]:
+            lines.append(f"  🔴 `{call[:65]}`")
+
+    if files_wr:
+        lines.append(f"\n📂 *Yozilgan Fayllar ({len(files_wr)} ta):*")
+        for fpath in sorted(files_wr)[:8]:
+            lines.append(f"  • `{fpath[:65]}`")
+
+    if procs:
+        lines.append(f"\n⚙️ *Jarayonlar ({len(procs)} ta):*")
+        for p in sorted(procs)[:5]:
+            lines.append(f"  • `{p[:65]}`")
+
+    if not any([dns_all, http_all, ip_all, sus_calls]):
+        lines.append("📭 Sandbox ma'lumotlari topilmadi.")
+
+    return "\n".join(lines)
+
+
+async def analyze_apk_dynamic(file_path: str, status_callback=None) -> tuple:
+    """
+    VT sandbox orqali dinamik tahlil.
+    status_callback: async func(str) — jarayon yangilanishlari uchun
+    Returns: (report_text: str, has_data: bool)
+    """
+    loop = asyncio.get_event_loop()
+    vt_key = os.getenv("VIRUSTOTAL_API_KEY", "").strip()
+    if not vt_key:
+        return "⚪ VT API kaliti sozlanmagan (`VIRUSTOTAL_API_KEY` .env ga qo'shing).", False
+
+    # Hash hisoblash
+    hashes = await loop.run_in_executor(executor, _apk_hash, file_path)
+    sha256 = hashes["sha256"]
+
+    # 1. Darhol behavioral so'rov
+    behaviours = await loop.run_in_executor(executor, _vt_get_behaviours, sha256, vt_key)
+
+    if behaviours is None:
+        # Fayl VT da yo'q — yuklash kerak
+        if status_callback:
+            await status_callback("📤 APK VT da topilmadi — yuklanmoqda...")
+
+        if not os.path.isfile(file_path):
+            return "❌ Vaqtinchalik fayl yo'qoldi — dinamik tahlil amalga oshmadi.", False
+
+        analysis_id = await loop.run_in_executor(executor, _vt_upload_file, file_path, vt_key)
+
+        if analysis_id == "__too_large__":
+            return "⚠️ APK 32MB dan katta — VT bepul yuklab bo'lmadi.", False
+        if not analysis_id:
+            return "❌ VT ga yuklashda xato yuz berdi.", False
+
+        if status_callback:
+            await status_callback("⏳ VT skanerlash boshlandi... (max 3 daqiqa)")
+
+        # Static scan tugashini kutish (max 3 daqiqa)
+        final_sha256 = sha256
+        for attempt in range(12):   # 12 × 15s = 180s
+            await asyncio.sleep(15)
+            poll = await loop.run_in_executor(executor, _vt_poll_analysis, analysis_id, vt_key)
+            if poll.get("status") == "completed":
+                if poll.get("sha256"):
+                    final_sha256 = poll["sha256"]
+                break
+            if status_callback and attempt % 2 == 1:
+                elapsed = (attempt + 1) * 15
+                await status_callback(f"⏳ VT skanerlash: {elapsed}s o'tdi...")
+
+        # Behavioral so'rov (scan tugagandan keyin ham bo'sh bo'lishi mumkin)
+        behaviours = await loop.run_in_executor(executor, _vt_get_behaviours, final_sha256, vt_key)
+
+    if not behaviours:
+        return (
+            "📭 *Sandbox ma'lumotlari yo'q*\n\n"
+            "Bu APK hali hech qanday sandbox da ishga tushmagan yoki "
+            "VT ushbu fayl uchun behavioral tahlil o'tkazmagan.\n\n"
+            "💡 _Manual usul uchun: NoxPlayer + HttpCanary ko'rsatmasi botda mavjud._"
+        ), False
+
+    report = _format_vt_behaviours(behaviours)
+    return report, True
+
+
+# ══════════════════════════════════════════════════════════════════════
 # 🎵 OGG / AUDIO FAYL TAHLIL
 # ══════════════════════════════════════════════════════════════════════
 
