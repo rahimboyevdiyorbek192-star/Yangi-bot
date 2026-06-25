@@ -1,0 +1,32 @@
+[
+  {
+    "id": "dokon_ochish",
+    "nomi": "Do'konni ochish",
+    "matn": "Bugun do'konni soat to'qqizda oching. Eshik va vitrinalarni tozalang, kassani tekshiring, mahsulotlarni joy-joyiga tering va narx yorliqlarini ko'zdan kechiring. Hammasi tayyor bo'lgach menga xabar bering."
+  },
+  {
+    "id": "dokon_yopish",
+    "nomi": "Do'konni yopish",
+    "matn": "Ish kuni tugagach do'konni yoping. Kassani sanang va hisobotni tayyorlang, qoldiq mahsulotni tekshiring, chiroqlar va asboblarni o'chiring, eshikni qulflang va signalizatsiyani yoqing."
+  },
+  {
+    "id": "tovar_qabul",
+    "nomi": "Tovar qabul qilish",
+    "matn": "Bugun yangi tovar yetkazib beriladi. Tovarni nakladnoy bo'yicha sanab qabul qiling, sifatini tekshiring, omborga joylashtiring va dasturga kiriting. Kam yoki buzuq tovar bo'lsa darhol menga aytib qoldiring."
+  },
+  {
+    "id": "tozalash",
+    "nomi": "Tozalik ishlari",
+    "matn": "Ish joyini tozalang. Pol va javonlarni arting, axlatni chiqaring, hojatxonani tartibga keltiring va umumiy tartibni saqlang."
+  },
+  {
+    "id": "yigilish",
+    "nomi": "Yig'ilishga chaqirish",
+    "matn": "Ertaga ertalab soat sakkiz yarimda umumiy yig'ilish bo'ladi. Iltimos o'z vaqtida yetib keling, kechikmang. Yig'ilishda haftalik rejani muhokama qilamiz."
+  },
+  {
+    "id": "inventarizatsiya",
+    "nomi": "Inventarizatsiya",
+    "matn": "Bugun inventarizatsiya o'tkazamiz. Barcha mahsulotni sanab chiqing, dasturdagi qoldiq bilan solishtiring va farqlar bo'lsa ro'yxatga oling. Yakunda hisobotni menga yuboring."
+  }
+]

@@ -1,0 +1,5 @@
+[
+  { "id": 1, "ism": "Aziz Karimov", "telefon": "+998901234501", "lavozim": "Sotuvchi" },
+  { "id": 2, "ism": "Dilnoza Yusupova", "telefon": "+998901234502", "lavozim": "Kassir" },
+  { "id": 3, "ism": "Bobur Rahimov", "telefon": "+998901234503", "lavozim": "Omborchi" }
+]

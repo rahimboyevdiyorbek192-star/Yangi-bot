@@ -1,0 +1,5 @@
+.env
+__pycache__/
+*.pyc
+data/qongiroqlar.db
+static/audio/*.mp3
