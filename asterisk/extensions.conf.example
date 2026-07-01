@@ -1,0 +1,17 @@
+;
+; Asterisk dialplan — ovozli xabarni o'ynatuvchi kontekst.
+; Bu blokni /etc/asterisk/extensions.conf fayliga qo'shing.
+;
+; Qo'ng'iroq ko'tarilgach: 1 soniya kutadi, ovozli xabarni o'ynaydi,
+; so'ng qo'ng'iroqni tugatadi.
+;
+; AUDIOFILE o'zgaruvchisi qo'ng'iroq faylidan (call file) keladi —
+; bu Asterisk ovozlar papkasidagi fayl nomi (kengaytmasiz), masalan "xabar".
+;
+
+[broadcast]
+exten => s,1,Answer()
+ same => n,Wait(1)
+ same => n,Playback(${AUDIOFILE})
+ same => n,Wait(1)
+ same => n,Hangup()

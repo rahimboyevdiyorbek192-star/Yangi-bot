@@ -34,6 +34,22 @@ MOHIR_STT_URL = _get("MOHIR_STT_URL", "https://mohir.ai/api/v1/stt")
 TELEGRAM_BOT_TOKEN = _get("TELEGRAM_BOT_TOKEN")
 ADMIN_ID = int(_get("ADMIN_ID", "0") or "0")
 
+# --- GSM modem / Asterisk (o'z SIM kartangiz orqali qo'ng'iroq) ---
+# Sizning raqamingiz (xodimga shu raqamdan qo'ng'iroq ketadi)
+CALLER_ID = _get("CALLER_ID")
+# Asterisk chan_dongle dagi qurilma nomi (dongle.conf da sozlanadi)
+DONGLE_DEVICE = _get("DONGLE_DEVICE", "dongle0")
+# Asterisk qo'ng'iroq fayllarini kutadigan papka
+ASTERISK_SPOOL_DIR = _get("ASTERISK_SPOOL_DIR", "/var/spool/asterisk/outgoing")
+# Asterisk ovoz fayllari papkasi (ovozli xabar shu yerga saqlanadi)
+ASTERISK_SOUNDS_DIR = _get("ASTERISK_SOUNDS_DIR", "/var/lib/asterisk/sounds")
+# extensions.conf dagi kontekst nomi
+BROADCAST_CONTEXT = _get("BROADCAST_CONTEXT", "broadcast")
+# Ovozli xabar fayl nomi (kengaytmasiz — Asterisk shu nom bilan o'ynatadi)
+BROADCAST_SOUND = _get("BROADCAST_SOUND", "xabar")
+# ffmpeg dasturi (ogg -> wav aylantirish uchun)
+FFMPEG = _get("FFMPEG", "ffmpeg")
+
 # --- Yo'llar ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")

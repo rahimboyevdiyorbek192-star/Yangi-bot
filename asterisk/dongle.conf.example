@@ -1,0 +1,30 @@
+;
+; chan_dongle sozlamasi — GSM modem (o'z SIM kartangiz)
+; Bu faylni Asterisk sozlamalari papkasiga (odatda /etc/asterisk/dongle.conf)
+; nusxalab, o'z qurilmangizga moslang.
+;
+; chan_dongle o'rnatish:
+;   https://github.com/wdoekes/asterisk-chan-dongle (yoki tarmoqdagi forklar)
+; Ovozni qo'llaydigan modem kerak (masalan Huawei E1550/E169 voice firmware).
+;
+; Qurilma nomini topish:  ls -l /dev/ttyUSB*
+;   Modem odatda 2 ta port ochadi: biri DATA, biri AUDIO.
+;
+
+[general]
+interval=15
+
+[dongle0]
+; DATA porti (AT komandalar uchun)
+data=/dev/ttyUSB1
+; AUDIO porti (ovoz uchun)
+audio=/dev/ttyUSB2
+; Kelgan qo'ng'iroqlarni qaysi kontekstga yo'naltirish (bizga shart emas)
+context=incoming
+; SIM PIN kodi bo'lsa yozing, bo'lmasa bo'sh qoldiring
+;pin=1234
+; Qo'ng'iroq ovozi balandligi
+rxgain=3
+txgain=3
+; Modem ulanganda avtomatik ishga tushsin
+initstate=start
